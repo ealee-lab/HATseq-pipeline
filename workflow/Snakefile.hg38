@@ -1,0 +1,1003 @@
+#Import required libraries
+import pandas as pd
+import os
+import re
+import gzip
+import pysam
+
+#Get variables from config file
+output_dir = config["output_dir"]
+tmp_dir = config["tmp_dir"]
+sample_name = config["sample_name"]
+te_name = config["te_name"] 
+index = config["index"] 
+raw_fastq1 =  config["raw_fastq1"]
+raw_fastq2 = config["raw_fastq2"] 
+cores = config["cores"] 
+fastq_screen_config = config["fastq_screen_config"]  
+reference_dir = config["reference_dir"]
+ref_genome = config["bwa_ref_genome"]
+STAR_genome = config["STAR_genome_dir"]
+
+
+
+#Create lists of subfamilies 
+LINE_FAMILIES=["L1HS" ,"L1PA2" , "L1PA3" , "L1PA4" , "L1PA5"] #All
+LINE_FAMILIES_FILTER=["L1HS" ,"L1PA2" , "L1PA3" , "L1PA4"] #Closest
+
+#List of reference files
+line_family_beds = expand( reference_dir +"/RepeatMasker/" + "hg38.repeatmasker.v37.{line_family}.bed.chr.bed" , line_family=LINE_FAMILIES) # This might not work outside the snakemake rules
+Evrony_KR = reference_dir + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed"
+repeat_masker = reference_dir + "/RepeatMasker/hg38.repeatmasker.v37.bed.chr.bed"
+repeat_files =  expand(reference_dir +"/RepeatMasker/hg38.repeatmasker.v37.{line_family}.bed.chr.bed", line_family=LINE_FAMILIES_FILTER)
+homopolymers = reference_dir + "/human/hg19/hg38.hg19.homo8.chr.bed"
+hg38 = reference_dir + "/human/hg19/hg38.genome"
+#eul1db = reference_dir + "/eul1db/hg38.eul1db_mrip.revised.chr.bed"
+i1kgp = reference_dir + "/1kgp/1kgp.AF.ME.final.hg38.no.spikein.bed"
+#Evrony_KNR = reference_dir + "/RepeatMasker/hg38.Evrony_KNR.v37.re vised.bed.chr.bed"
+#tebreak = reference_dir + "/tebreak/hg38.nonref.collection.hg19.revised.chr.bed"
+gnomad = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.nospikein.noGTS.bed" #gnomad_v2_MEI.sites_hg19.revised.bed"
+nyuwa = reference_dir + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.nospikein.noGTS.bed"
+
+
+#Abstract paths to variables so files are written to consistent places
+fastq_path = output_dir + "/" + "analysis" + "/" + "fastqs" + "/" + sample_name + "_" + te_name
+bam_path = output_dir + "/" + "analysis" + "/" + "bams" + "/" + sample_name + "_" + te_name
+tsv_path = output_dir + "/" + "analysis" + "/" + "tsv" + "/" + sample_name + "_" + te_name
+bed_path = output_dir + "/" + "analysis" + "/" + "bed" + "/" + sample_name + "_" + te_name
+read_lists_path = output_dir + "/" + "analysis" + "/" + "read_lists" + "/" + sample_name + "_" + te_name
+report_path = output_dir + "/" + "reports" + "/"
+
+#Create variable for each file 
+
+#QC and preprocessing
+adapter_trimmed_fastq1 = fastq_path + "_trimmed.1.fq.gz"
+adapter_trimmed_fastq2 = fastq_path + "_trimmed.2.fq.gz"
+fastp_html = report_path + "fastp" + "/" + sample_name + "_" + te_name + "_fastp.html"
+fastqc_report_path = report_path + "fastqc" + "/" + sample_name + "_" + te_name + "_" 
+fastqc_report = report_path + "fastqc" + "/" + sample_name + "_" + te_name + "_" + "fastqc.html"
+fastq_screen_report_path = report_path + "fastq_screen" + "/" #+ sample_name + "_" + te_name
+L1HS_trimmed_fastq1 = fastq_path + "_rmNoL1.1.fq.gz"
+L1HS_trimmed_fastq2 = fastq_path + "_rmNoL1.2.fq.gz"
+cutadapt_rmNoL1_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_rmNoL1.report.txt"
+primer_trimmed_fastq1 = fastq_path + "_chkPrimer.1.fq.gz"
+primer_trimmed_fastq2 = fastq_path + "_chkPrimer.2.fq.gz"
+cutadapt_check_primer_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_chkPrimer.report.txt"
+pe_overlap_trimmed_fastq1 = fastq_path + "_shrtIns.1.fq.gz"
+cutadapt_pe_overlap_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_shrtIns.report.txt"
+shortinsert_trimmed_fastq1 = fastq_path + "_Inform.1.fq.gz"
+longinsert_untrimmed_fastq1 = fastq_path + "_Inform_untrm.1.fq.gz"
+cutadapt_informative_R1_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_Inform.report.txt" #
+readIDs_minLength_R1 = read_lists_path + "_minLenR1.list.gz"
+readIDs_longinsert_R1 = read_lists_path + "_untrm.list.gz"
+readIDs_allpass_R1 = read_lists_path + "_allR1.list.gz"
+readIDs_allpass_R2 = read_lists_path + "_final.list.gz"
+align_ready_fastq1 = fastq_path + "_final.1.fq.gz",
+align_ready_fastq2 = fastq_path + "_final.2.fq.gz"
+
+
+#Alingment
+pe_bwa_bam = bam_path + "_bwa_pe.bam"
+pe_bwa_bam_uniqmappers = bam_path + "_bwa_pe_uniq.bam"
+pe_bwa_bam_uniqmappers_sorted = bam_path + "_bwa_pe_uniq_sorted.bam"
+pe_bwa_bam_uniqmappers_sorted_bai = pe_bwa_bam_uniqmappers_sorted + ".bai" 
+assembled_trimmed_contigs = fastq_path + "_pear_clip.fq.gz"
+pear_path = fastq_path + "_pear_tmp"
+subset_trimmed_fastq1 = fastq_path + "_pear_trimmed_input.1.fq.gz"    #            fastq_pear1 = subset_trimmed_fastq1,
+subset_trimmed_fastq2 = fastq_path + "_pear_trimmed_input.2.fq.gz"   #             fastq_pear2 = subset_trimmed_fastq2
+pear_unassembled_reads = read_lists_path + "_unassembled.list.txt" 
+contig_bwa_bam = bam_path + "_bwa_contig.bam"
+contig_bwa_bam_sorted = bam_path + "_bwa_contig_sorted.bam"
+contig_bwa_bam_sorted_markdup = bam_path + "_bwa_contig_sorted_dup.bam"
+contig_bwa_bam_sorted_markdup_uniq = bam_path + "_bwa_contig_sorted_dup_uniq.bam"
+contig_bwa_bam_sorted_markdup_uniq_csorted = bam_path + "_bwa_contig_sorted_dup_uniq_csorted.bam"
+contig_bwa_bam_sorted_markdup_uniq_csorted_bai = bam_path + "_bwa_contig_sorted_dup_uniq_csorted.bam.bai"
+unmapped_full_contig_fastq = fastq_path + "_pear_unmap.fq.gz"
+unmapped_exclusive_contig_fastq = fastq_path + "_pear_unmap_nolowqual.fq.gz"
+lowqual_contig_fastq = fastq_path + "_pear_lowqual.fq.gz",
+combined_trimmed_lowqual_unmap_contigs = fastq_path + "_pear_lowqual_unmap_trimmed.fq.gz"
+readIDs_lowqual_contig = read_lists_path + "_lowqual.list.gz"	
+readIDs_unmapped_full_contig = read_lists_path + "_unmap_full.list.gz"
+readIDs_unmapped_exclusive_contig = read_lists_path + "_unmap.list.gz"
+cutadapt_lowqual_L1HS_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_trimL1_contig_lowqual.report.txt",
+cutadapt_unmap_L1HS_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_trimL1_contig_unmap.report.txt",
+cutadapt_lowqual_T_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_trimT_contig_lowqual.report.txt",
+cutadapt_unmap_T_report = report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_trimT_contig_unmap.report.txt",
+lowqual_trimmed = fastq_path + "_pear_lowqual_trimmed.fq.gz",
+unmap_trimmed = fastq_path + "_pear_unmap_nolowqual_trimmed.fq.gz"
+contig_star_sam = bam_path + "_STAR.Aligned.out.sam"
+contig_star_path = bam_path + "_STAR."
+contig_star_bam = bam_path + "_STAR_markdup.bam"
+contig_star_sorted_bam  = bam_path + "_STAR_markdup_sorted.bam"
+contig_star_sorted_minlength_bam = bam_path + "_STAR_markdup_sorted_minLen.bam"
+contig_star_sorted_minlength_maxmismatch_bam = bam_path + "_STAR_markdup_sorted_minLen_mm.bam" 
+contig_star_sorted_minlength_maxmismatch_bam_bai = bam_path + "_STAR_markdup_sorted_minLen_mm.bam.bai"
+
+
+#Peak calling 
+#gen_cov_ref = reference_dir + "/human_g1k_v37.genome"
+bwa_gen_cov_bed = bed_path + "_genCov_bwa_sorted.bed"
+bwa_merged_bed = bed_path + "_merge_bwa.bed"
+bwa_intersect_tsv = tsv_path + "_intersect_bwa.tsv"
+bwa_dups_tsv = tsv_path + "_countdups_bwa.tsv"
+star_gen_cov_plus_bed  = bed_path + "_genCov_STAR_plus_sorted.bed"
+star_gen_cov_minus_bed = bed_path + "_genCov_STAR_minus_sorted.bed"
+star_merged_plus = bed_path + "_merge_STAR_plus.bed"
+star_merged_minus = bed_path + "_merge_STAR_minus.bed"
+star_intersect_tsv = tsv_path + "_intersect_STAR.tsv"
+star_dups_tsv = tsv_path + "_countdups_STAR.tsv"
+#line_family_beds = expand( reference_dir +"/RepeatMasker/" + "repeatmasker.v37.{line_family}.bed" , line_family=LINE_FAMILIES) # This might not work outside the snakemake rules
+bwa_line_family_overlap_tsvs = expand( bed_path + "_{line_family}_bwa.tsv", line_family=LINE_FAMILIES)
+#Evrony_KR = reference_dir + "/RepeatMasker/Evrony_KR_960.v37.revised.bed"
+bwa_L1HS_overlap_tsv = bed_path + "_L1HS_bwa.tsv" 
+bwa_L1HS_Evrony_overlap_tsv = bed_path + "_L1HS_Evrony_bwa.tsv" 
+#repeat_masker = reference_dir + "/RepeatMasker/repeatmasker.v37.bed"
+bwa_repeat_overlap_tsv = tsv_path + "_repeats_bwa.tsv"
+#repeat_files =  expand(reference_dir +"/RepeatMasker/repeatmasker.v37.{line_family}.bed", line_family=LINE_FAMILIES_FILTER)
+bwa_no_overlap_tsv = tsv_path + "_noL1ovlp.tsv"
+star_line_family_overlap_tsvs = expand( bed_path + "_{line_family}_STAR.tsv", line_family=LINE_FAMILIES)
+star_L1HS_overlap_tsv =  bed_path + "_L1HS_STAR.tsv"
+star_L1HS_Evrony_overlap_tsv = bed_path + "_L1HS_Evrony_STAR.tsv"
+star_repeat_overlap_tsv = tsv_path + "_repeats_STAR.tsv"
+star_no_overlap_tsv = tsv_path + "_noL1ovlp_STAR.tsv"
+#homopolymers = reference_dir + "/human/hg19/hg19.homo8.bed"
+star_overlap_hmply_tsv = tsv_path + "_ovlp_hply_STAR.tsv"
+#hg19 = reference_dir + "/human/hg19/hg19.genome"
+#eul1db = reference_dir + "/eul1db/eul1db_mrip.revised.bed"
+#i1kgp = reference_dir + "/1kgp/1kgp.AF.ME.final.bed"
+#Evrony_KNR = reference_dir + "/RepeatMasker/Evrony_KNR.v37.revised.bed" 
+#tebreak = reference_dir + "/tebreak/nonref.collection.hg19.revised.bed"
+#gnomad = reference_dir + "/gnomAD-SV/gnomad_v2_MEI.sites_hg19.revised.bed"
+star_intersect_KNR_tsv = tsv_path + "_intersect_KNR_STAR.tsv"
+star_overlap_KNR_tsv =  tsv_path + "_KNR_STAR.tsv"
+star_no_overlap_KNR_tsv = tsv_path + "_noKNR_STAR.tsv"
+readIDs_no_overlap_KNR_nonPCRdup = tsv_path + "_noKNR_STAR_noPCRdup_IDs.tsv"
+readIDs_no_overlap_KNR = tsv_path + "_noKNR_STAR_IDs.tsv"
+no_overlap_KNR_nonPCRdup_fasta = tmp_dir + "/" + sample_name + "_" + te_name + "_blat.fa"
+blat_out_table = tmp_dir + "/" + sample_name + "_" + te_name + "_blast8.out"
+
+
+#Filters
+blat_out_table_filtered_out = tsv_path + "_blast8.out.filtered.gz"
+readIDs_no_overlap_KNR_nonPCRdup_nodups = tsv_path + "_noKNR_STAR_noPCRdup_IDs_nodups.tsv" # no reason this needs to be written to disk 
+blat_intersect = tsv_path + "_intersect_blat.tsv" 
+blat_30 = tsv_path + "_blat_30.tsv" 
+blat_noshow = tsv_path + "_blat_ns.tsv"
+blat_np = tsv_path + "_blat_np.tsv"
+blat_pass_readIDs = tsv_path + "_blat_pass.tsv"
+blat_nopass_readIDs = tsv_path + "_blat_nopass.tsv"
+big_table = tsv_path + "_big_table.txt"
+gmotif_filtered_ID = tsv_path + "_g_pass.ID" , #.gz",
+gmotif_filtered_out = tsv_path + "_g_pass.tsv",
+gmotif_filtered_notmp = tsv_path + "_g_nopass.tmp",
+gmotif_filtered_nopass = tsv_path + "_g_nopass.tsv",
+big_table_blast = tsv_path + "_big_table_blast.txt"
+blast_prefix =  tmp_dir + "/" + "analysis" + "/" + "blast" + "/" + sample_name + "_" + te_name + "_blast.out"
+blast_path = tmp_dir + "/" + "analysis" + "/" + "blast" 
+blast_fastq = tmp_dir + "/" + "analysis" + "/" "blast" + "/" + sample_name + "_" + te_name + "_blast_sub.gz"
+blast_read_list = tsv_path +  "_blast.txt"
+chimera = tsv_path + "_chimera.txt" 
+nonchimera = tsv_path + "_nonchimera.txt" 
+blast_filtered = tsv_path + "_pass_after_blast.tsv" 
+blast_no_pass_filtered = tsv_path + "_nopass_after_blast.tsv" 
+blast_not_run_filtered_tmp = tsv_path + "_notrun_after_blast.tsv.tmp" 
+blast_not_run_filtered = tsv_path + "_notrun_after_blast.tsv" 
+pass_blast_tmp = tsv_path + "_blast_pass.tsv.tmp" 
+pass_blast_reads = tsv_path + "_blast_pass_readIDs.tsv"
+pass_blast = tsv_path + "_blast_pass.tsv"
+pass_blast_peaks = tsv_path + "_blast_pass_peaks.tsv"
+star_realign_fastq = fastq_path + "_realign.fq.gz"
+star_realign_bam = bam_path + "_STAR.realign.Aligned.sortedByCoord.out.bam"
+star_realign_bam_bai = bam_path + "_STAR.realign.Aligned.sortedByCoord.out.bam.bai"
+star_realign_dups_tsv = tsv_path + "_countdups_STAR_final.tsv"
+star_realign_dups_tsv_join = tsv_path + "_countdups_STAR_final_joined.tsv"
+star_realign_dups_tsv_filtered = tsv_path + "_countdups_STAR_final_filtered.tsv"
+star_big_table  = tsv_path + "_big_table_pcr.tsv"
+preNN_fastq = fastq_path + "pre_NN_trimmed.2.fq.gz"
+NN_trimmed_fastq = fastq_path + "_NN_trimmed.2.fq.gz"
+NN_report =  report_path + "cutadapt" + "/" + sample_name + "_" + te_name + "_NN_cutadapt.txt" 
+NN_list = tsv_path + "_NN_list.txt" 
+NN_tsv =  tsv_path + "_NN_list.tsv"
+full_NN_tsv = tsv_path + "_all_NN_list.tsv"
+pass_NN = tsv_path + "_pass_NN_list.tsv"
+pass_all = tsv_path + "_pass_all.tsv"
+unk_calling = tsv_path + "_unk_calling.tsv"
+bwa_rescue_bam = bam_path + "_bwa_rescue_sorted.bam"
+merged_bam = bam_path + "_merged.bam"
+merged_bam_index = bam_path + "_merged.bam.bai"
+bwa_rescue_count_dups = tsv_path + "_unk_calling.tsv"
+	#Rule definitions
+rule all: #get successful output from module 2-6 ? maybe write simple done script? 
+	input:
+		#pass_NN	,
+		pass_all,
+		#unk_calling,
+		#fastqc_report,
+		#fastq_screen_report_path + "1.trimmed_screen.html",
+		#fastp_html,
+		#fastqc_report,
+		#fastq_screen_report_path + "1.trimmed_screen.html",
+		#L1HS_trimmed_fastq1,
+		#primer_trimmed_fastq1,
+		#pe_overlap_trimmed_fastq1,
+		#shortinsert_trimmed_fastq1,
+		#readIDs_minLength_R1,
+		#readIDs_allpass_R2,
+		#pe_bwa_bam,
+		#assembled_trimmed_contigs,
+		#contig_bwa_bam,
+		#readIDs_unmapped_exclusive_contig,
+		#unmapped_exclusive_contig_fastq,
+		#combined_trimmed_lowqual_unmap_contigs,
+		bwa_dups_tsv,
+		#star_dups_tsv,
+		bwa_no_overlap_tsv,
+		#star_no_overlap_KNR_tsv,
+		#ffbig_table,
+		pass_blast,
+		chimera,
+		nonchimera
+		#		temp = "/home/sm745/HATseq_all/HATseq_v2/workflow/done_with_1_blast_filter"	
+
+
+
+
+#Module 1: QC and Preprocessing  
+#QC
+rule qc:
+	input:
+		fastq1 = raw_fastq1,
+		fastq2 = raw_fastq2
+		#config = fastq_screen_config
+	output: 
+		fastq1 = adapter_trimmed_fastq1 ,
+		fastq2 = adapter_trimmed_fastq2,
+		html = fastp_html,
+		#fastqc_report = fastqc_report
+		#fastq_screen_html = fastq_screen_report_path + "1.trimmed_screen.html"
+	params: 
+		adapter = "AGATCGGAAGAGC",
+		length_req = 50,
+		fastqc_report_path = fastqc_report_path,
+		fastq_screen_report_path = fastq_screen_report_path,
+		top_n_reads = 100000
+	threads: 4
+	resources:
+		runtime = 200, 
+		mem_mb = 5000
+	shell: 
+        	"fastp -w {threads} -a {params.adapter} --length_required={params.length_req} -i {input.fastq1} -I {input.fastq2} -o {output.fastq1} -O {output.fastq2} -h {output.html} \n"        
+		#"mkdir -p {report_path}fastqc \n" 
+		#"fastqc -t {threads} -o {report_path}  --noextract --nogroup {input.fastq1} {input.fastq2} \n"
+		#"fastq_screen --threads {threads} --force --conf {input.config} --top {params.top_n_reads} --outdir {params.fastq_screen_report_path} {output.fastq1} {output.fastq2} \n"
+#Pre_processing
+rule pre_processing:
+	input:
+		fastq1 = adapter_trimmed_fastq1,
+		fastq2 = adapter_trimmed_fastq2
+	output:
+		L1HS1 = L1HS_trimmed_fastq1,
+		L1HS2 = L1HS_trimmed_fastq2,
+		report = cutadapt_rmNoL1_report,
+		primer1 = primer_trimmed_fastq1,
+		primer2 = primer_trimmed_fastq2,
+		overlap_L1HS1 = pe_overlap_trimmed_fastq1,
+		short1 = shortinsert_trimmed_fastq1,
+		untrimmed1 = longinsert_untrimmed_fastq1,
+		list = readIDs_minLength_R1,
+		untrm_list = readIDs_longinsert_R1,
+		allR1list = readIDs_allpass_R1,
+		read2_pairs_pass_read1 = tmp_dir + "/read2_pairs_pass_read1.tmp",
+		allR2 = readIDs_allpass_R2,
+		final1 = align_ready_fastq1,
+		final2 = align_ready_fastq2
+	params:
+		min_len = 5,
+		min_len_informative = 70,
+		adapter_L1HS = index + "GGGAGATATACCTAATGCTAGATGACAC" ,
+		adapter_primer = "^TTAGTGGGTGCAGCGCACCA" ,
+		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC" ,
+		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
+		L1PA_young_sequence = "TTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT"
+	threads: 4
+        resources:
+                runtime = 600,
+                mem_mb = 10000
+	shell: 
+		"cutadapt -m {params.min_len} -g {params.adapter_L1HS} --discard-untrimmed -O 10 -e 0.08 -p {output.L1HS1} -o {output.L1HS2} {input.fastq2} {input.fastq1} >> {output.report} \n"
+		"cutadapt -m {params.min_len} -g {params.adapter_primer} --discard-untrimmed -O 5 -e 0.16 -p {output.primer1} -o {output.primer2} {output.L1HS2} {output.L1HS1} >> {output.report} \n"
+		"cutadapt -m {params.min_len} -a {params.adapter_overlap_L1HS} -O 5 -e 0.08 -o {output.overlap_L1HS1} {output.primer1} >> {output.report} \n"
+		"cutadapt -m {params.min_len} -a {params.adapter_overlap_primer} -O 5 -e 0.16 --untrimmed-output {output.untrimmed1} -o {output.short1} {output.overlap_L1HS1} >> {output.report} \n"		
+		"cutadapt -m {params.min_len_informative} {output.short1} | seqkit seq -i -n - | gzip > {output.list} \n"
+		"seqkit seq -i -n {output.untrimmed1} | gzip > {output.untrm_list} \n"
+		"zcat {output.list} {output.untrm_list} | gzip > {output.allR1list} \n"
+		"seqtk subseq {output.L1HS2} <( zcat {output.allR1list}) | gzip - > {output.read2_pairs_pass_read1} \n"
+		"cutadapt --cores=0 --discard-untrimmed -g {params.L1PA_young_sequence} -e 0.05 -O 20 {output.read2_pairs_pass_read1} | seqkit seq -i -n - | sort | gzip > {output.allR2} \n"
+                "seqtk subseq {output.read2_pairs_pass_read1} <(zcat {output.allR2}) | gzip - > {output.final2} \n"
+                "seqtk subseq {output.L1HS1} <(zcat {output.allR2}) | gzip - > {output.final1} \n"
+		
+
+
+#Module 2 : Alignment
+#BWA 
+rule bwa_PE:
+	input:
+		ref_genome = ref_genome,
+		fastq1 = align_ready_fastq1,
+        	fastq2 = align_ready_fastq2		
+	output:
+		bam = pe_bwa_bam,
+        	uniq_bam = pe_bwa_bam_uniqmappers,
+        	sorted_bam = pe_bwa_bam_uniqmappers_sorted, 
+        	index = pe_bwa_bam_uniqmappers_sorted_bai
+	params:
+		RG_ID = r"-R '@RG\tID:" + te_name + r"\tSM:" + sample_name + r"\tPL:NovaseqS4\tLB:HAT-seq\tCN:Macrogen'"
+	threads: 8
+        resources:
+                runtime = 5700,
+                mem_mb = 30000
+	shell: 
+		"bwa mem -t CORE={threads} {params.RG_ID} {input.ref_genome} {input.fastq1} {input.fastq2} | samblaster | samtools view -Sb - > {output.bam} \n"
+        	"samtools view -f 0x2 -q 20 {output.bam} | awk '{{for (i=1;i<=NF;i++) {{if ($i ~/AS:i:/) {{split ($i,a,\":\") }} ;if ($i ~/XS:i:/) {{split ($i,b,\":\")}}  }}; if (a[3]>b[3]) print; }}' | cat <(samtools view -H {output.bam}) - | samtools view -Sb - > {output.uniq_bam} \n"
+	        "sambamba sort -o {output.sorted_bam} {output.uniq_bam} \n"  
+        	"sambamba index {output.sorted_bam} \n"
+
+#PEAR
+rule pear:
+	input:
+		fastq1 = adapter_trimmed_fastq1, #L1HS_trimmed_fastq1 , #align_ready_fastq1,
+		fastq2 = adapter_trimmed_fastq2, #L1HS_trimmed_fastq2, #align_ready_fastq2
+		readIDs = readIDs_allpass_R2	
+	output:
+		fastq = assembled_trimmed_contigs,
+		fastq_pear1 = subset_trimmed_fastq1,
+		fastq_pear2 = subset_trimmed_fastq2,
+		unassembled_read_list = pear_unassembled_reads
+	params:
+		name = pear_path,	
+		cores = cores,
+		max_len_pear = 300,
+		min_len_pear = 70,
+		min_len_cutadapt = 5,
+		adapter = "AGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAAGTGTCATCTAGCATTAGGTATATCTCCC", #Changing the sequence that gets trimmed up to the gmotif 
+		min_ovlp = 20, #increased min ovlp because the sequence length increased
+		max_err = 0.05, # len of seq is 102, 5 mismatches is an error rate of .049#changing err to match other times 
+		assembled_contigs = tmp_dir + "/assembled_contigs.tmp"
+	threads: 8
+        resources:
+                runtime = 700,
+                mem_mb = 40000
+	shell:
+		"seqtk subseq {input.fastq1} <(zcat {input.readIDs}) | gzip - > {output.fastq_pear1} \n"
+		"seqtk subseq {input.fastq2} <(zcat {input.readIDs}) | gzip - > {output.fastq_pear2} \n"
+		"pear -j {threads} -m {params.max_len_pear} -n {params.min_len_pear} -f {output.fastq_pear1} -r {output.fastq_pear2} -o {params.assembled_contigs}  \n"
+      		"cutadapt -m {params.min_len_cutadapt} -a {params.adapter} -O {params.min_ovlp} -e {params.max_err}  -o {output.fastq} {params.assembled_contigs}.assembled.fastq \n"
+		"seqkit seq -i -n {params.assembled_contigs}.unassembled.forward.fastq > {output.unassembled_read_list} \n" 
+
+rule bwa_contig:
+	input: 
+		fastq = assembled_trimmed_contigs,
+		ref = ref_genome
+	output:
+		bam = contig_bwa_bam,
+        	sorted_bam = contig_bwa_bam_sorted,
+	        sorted_markdup_bam = contig_bwa_bam_sorted_markdup ,
+        	sorted_markdup_uniqmappers_bam = contig_bwa_bam_sorted_markdup_uniq, 
+		sorted_markdup_uniqmappers_bam_csorted = contig_bwa_bam_sorted_markdup_uniq_csorted,
+	        sorted_markdup_uniqmappers_bam_csorted_bai = contig_bwa_bam_sorted_markdup_uniq_csorted_bai,
+		unmapped = unmapped_full_contig_fastq,
+        	unmapped_list = readIDs_unmapped_full_contig,
+	        lowqual_list = readIDs_lowqual_contig,
+        	lowqual = lowqual_contig_fastq
+	params:
+		RG_ID =  r"-R '@RG\tID:" + te_name + r"\tSM:" + sample_name + r"\tPL:NovaseqS4\tLB:HAT-seq\tCN:Macrogen'", #r"-R '@RG\tID:{sample}\tSM:{sample}'" ,
+		cores = 8,
+        	minClipSize = 1
+	threads: 8
+        resources:
+                runtime = 2000,
+                mem_mb = 30000
+	shell:
+		"bwa mem -t {params.cores} {params.RG_ID} {input.ref} {input.fastq} | samtools view -S -b -h - > {output.bam} \n"
+        	"sambamba sort -n -o {output.sorted_bam} {output.bam} \n"
+	        "samtools view -S -h {output.sorted_bam} | samblaster --minClipSize {params.minClipSize} --ignoreUnmated -u {output.unmapped} | samtools view -Sb - > {output.sorted_markdup_bam} \n"   
+        	"samtools view -q 20 {output.sorted_markdup_bam} | awk '{{for (i=1;i<=NF;i++) {{if ($i ~/AS:i:/) {{split ($i,a,\":\") }} ;if ($i ~/XS:i:/) {{split ($i,b,\":\")}}  }}; if (a[3]>b[3]) print; }}' | cat <(samtools view -H {output.sorted_markdup_bam}) - | samtools view -Sb - > {output.sorted_markdup_uniqmappers_bam} \n"
+		"sambamba sort -o {output.sorted_markdup_uniqmappers_bam_csorted} {output.sorted_markdup_uniqmappers_bam} \n"
+	        "sambamba index {output.sorted_markdup_uniqmappers_bam_csorted} \n"
+        	"samtools view {output.sorted_markdup_bam} |  awk '$5<=20' | cut -f 1 | sort -V | uniq | gzip > {output.lowqual_list} \n"
+	        "seqtk subseq {input.fastq} <( zcat {output.lowqual_list}) | gzip > {output.lowqual} \n" 
+        	"seqkit seq -i -n {output.unmapped} | sort -V | gzip > {output.unmapped_list} \n" 
+        
+rule get_unmap_nolowqual_list:
+	input:
+		lowqual = readIDs_lowqual_contig,
+		unmap = readIDs_unmapped_full_contig
+	output:
+		unmap = readIDs_unmapped_exclusive_contig 
+	run: 
+		f_lowqual = gzip.open(input.lowqual, 'rt')	
+		f_unmap_full = gzip.open(input.unmap, 'rt')
+		lowqual = map(str.rstrip, f_lowqual.readlines())
+		unmap_full = map(str.rstrip, f_unmap_full.readlines())
+		unmap = list(set(unmap_full) - set(lowqual)) 
+		f_lowqual.close()
+		f_unmap_full.close()
+		f_unmap = gzip.open(output.unmap, 'w')
+		f_unmap.write(bytes("\n".join(unmap), 'utf-8'))
+		f_unmap.close()
+
+rule trimL1_contig:
+	input:
+		list = readIDs_unmapped_exclusive_contig ,
+		fastq = assembled_trimmed_contigs, 
+		lowqual = lowqual_contig_fastq
+	output:
+    		unmap = unmapped_exclusive_contig_fastq,
+		lowqual_report_L1 = cutadapt_lowqual_L1HS_report,
+		unmap_report_L1 = cutadapt_unmap_L1HS_report,
+		lowqual_report_T = cutadapt_lowqual_T_report,
+		unmap_report_T = cutadapt_unmap_T_report,
+		lowqual_trimmed = lowqual_trimmed,
+		unmap_trimmed = unmap_trimmed    
+	params:
+		adapter_L1 = "ATTATACTCTAAGTTTT", #AGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAA",
+		max_err_L1 = 0.05,
+		min_ovlp_L1 = 5 ,
+		adapter_T = "TTTTTTTT", 
+		max_err_T = 0,
+		min_ovlp_T = 5,
+		min_len_T = 20,
+		unmap_trimmedL1HS = tmp_dir + "/unmap_trimmedL1HS.tmp",
+		lowqual_trimmedL1HS = tmp_dir + "/lowqual_trimmedL1HS.tmp"
+	threads: 4
+        resources:
+                runtime = 300,
+                mem_mb = 5000
+	shell:
+        	"seqtk subseq {input.fastq} <( zcat {input.list}) | gzip > {output.unmap} \n"
+		"cutadapt -a {params.adapter_L1} -e {params.max_err_L1} -O {params.min_ovlp_L1} -o {params.lowqual_trimmedL1HS} {input.lowqual} > {output.lowqual_report_L1}\n"
+		"cutadapt -a {params.adapter_L1} -e {params.max_err_L1} -O {params.min_ovlp_L1} -o {params.unmap_trimmedL1HS} {output.unmap} > {output.unmap_report_L1} \n" 
+	        "cutadapt -a {params.adapter_T}X -m {params.min_len_T} -e {params.max_err_T} -O {params.min_ovlp_T} -o {output.lowqual_trimmed} {params.lowqual_trimmedL1HS} > {output.lowqual_report_T}\n" #polyT
+        	"cutadapt -a {params.adapter_T}X -m {params.min_len_T} -e {params.max_err_T} -O {params.min_ovlp_T} -o {output.unmap_trimmed} {params.unmap_trimmedL1HS} > {output.unmap_report_T} \n" #poly T
+
+#STAR 
+rule star: 
+	input:
+		ref = STAR_genome,
+		lowqual = lowqual_trimmed, 
+		unmap = unmap_trimmed
+	output: 
+        	combined_fq = combined_trimmed_lowqual_unmap_contigs,
+		sam = contig_star_sam,
+		bam = contig_star_bam,
+        	sorted_bam = contig_star_sorted_bam 
+	params:
+		name = contig_star_path ,
+		matchN = 0.3,
+		score = 0.3,
+		RG_ID = "ID:TE_" + te_name +  " SM:" + sample_name + " PL:illumina LB:TE_insertion CN:Macrogen", 
+		gap = -4,
+		gapGCAG = -4,
+		gapATAC = -4,
+		alignIntronMax = 500 
+	threads: 4
+        resources:
+                runtime = 1000,
+                mem_mb = 100000
+	shell: 
+        	"cat {input.lowqual} {input.unmap} > {output.combined_fq} \n"
+		"STAR --runThreadN {threads} --genomeDir {input.ref} --readFilesIn <(zcat {output.combined_fq}) --outFileNamePrefix {params.name} --outFilterMatchNminOverLread {params.matchN} --outFilterScoreMinOverLread {params.score} --outSAMattrRGline {params.RG_ID} --scoreGapNoncan {params.gap} --scoreGapGCAG {params.gapGCAG} --scoreGapATAC {params.gapATAC} --alignIntronMax {params.alignIntronMax} \n"
+		"samblaster -i {output.sam} | samtools view -q 255 -Sb - > {output.bam} \n"
+	        "sambamba sort -o {output.sorted_bam} {output.bam} \n"
+ 
+rule rm_short_star:
+        input:
+                bam = contig_star_sorted_bam
+        output:
+                outbam = contig_star_sorted_minlength_bam 
+        params:
+        	min_length = 30
+	run:
+		ibam=pysam.AlignmentFile(input.bam, 'rb')
+		obam=pysam.AlignmentFile(output.outbam, 'wb', template=ibam)
+		for read in ibam.fetch(until_eof=True):
+			if read.query_alignment_length >= params.min_length:
+				obam.write(read)
+				continue
+		ibam.close()
+		obam.close()
+
+rule rm_mismat_star:
+        input:
+                bam = contig_star_sorted_minlength_bam
+        output:
+                outbam = contig_star_sorted_minlength_maxmismatch_bam ,
+                index = contig_star_sorted_minlength_maxmismatch_bam_bai
+        shell:
+                "samtools view {input.bam}  | awk '{{for (i=1;i<=NF;i++) {{if ($i ~/nM:i:/) {{split ($i,a,\":\") ;if (a[3]<4) print; }}}}}}' | cat <(samtools view -H {input.bam}) - | samtools view -Sb - > {output.outbam} \n"
+                "sambamba index {output.outbam} \n" 
+
+
+#insert bwa rescue here 
+#rule rescue_long_fragments:
+ #       input:
+  #              raw_bwa_bam = pe_bwa_bam,
+   #             final_STAR_bam = contig_star_sorted_minlength_maxmismatch_bam , #star_realign_bam,
+    #            all_passing_peaks = pass_all,
+     #           unassembled_read_list = pear_unassembled_reads
+      #  output:
+#                bwa_rescue_bam = bwa_rescue_bam,
+ #               merged_bam = merged_bam,
+  #              merged_bam_index = merged_bam_index,
+   #             bwa_rescue_count_dups = bwa_rescue_count_dups
+    #    params:
+     #   shell:
+      #          "samtools view -b -h -N {input.unassembled_read_list} {input.raw_bwa_bam} | samtools sort - > {output.bwa_rescue_bam} \n"
+                #"samtools sort Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue.bam > Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue_sorted.bam \n"
+       #         "samtools merge -o {output.merged_bam} {input.final_STAR_bam} {output.bwa_rescue_bam} && samtools index {output.merged_bam} \n"
+        #        "{reference_dir}/../scripts/duplicate_reads.pl {output.merged_bam} <(tail -n +2 {input.all_passing_peaks} | awk '{{OFS=\"\t\"; print $1,$2,$3,$4,$6,$5}}' | sort -k 1,1 -k2,2n | mergeBed -s -i stdin -c 4,5,6 -o count_distinct,distinct,distinct ) > {output.bwa_rescue_count_dups} \n"
+
+
+#Module 3 : Peak calling 
+
+#BWA 
+#Get the number of reads at each unique start position, ie. pcr duplicates
+#Get regions coveredby distinct reads/readgroups. Columns are: chr	start	end	depth_of_coverage. depth_of_coverage won't be used
+#Merge neighboring reads into HATseq peaks. Columns are: chr	start	end	arbitrary_peak_name	
+#Get the number of reads in the bam and the number of reads in each peaks and number of unique start positions in each peak
+
+rule genCov_bwa:
+	input:
+		#ref_gen = gen_cov_ref,
+		bam = pe_bwa_bam_uniqmappers_sorted 
+	output:
+		sorted_bed = bwa_gen_cov_bed,
+        	merged_bed = bwa_merged_bed,
+        	intersect_tsv = bwa_intersect_tsv,
+        	count_dups_tsv = bwa_dups_tsv
+	params:
+        	distance = 100  # I think this is reasonable for bwa because there could be long fragments here
+	threads:4
+	resources:
+		runtime = 300,
+		mem_mb = 2000
+	shell: 
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\tfw_start,end\trv_start,end' > {output.count_dups_tsv} \n"
+		"genomeCoverageBed -ibam {input.bam}  -bg | sortBed -i - > {output.sorted_bed} \n" 	
+		"mergeBed -i {output.sorted_bed} -c 1 -o count | awk -v name={te_name} '{{OFS =\"\\t\"; print $1,$2,$3,name\"-bwa-PE-\"NR,$4,\"0\"}}' > {output.merged_bed} \n"  
+		"intersectBed -wa -wb -a <(bamToBed -i {input.bam}) -b {output.merged_bed} | {reference_dir}/../scripts/count_reads.pl | awk -v sum=$(samtools idxstats {input.bam} | awk -F '\t' '{{s+=$3+$4}}END{{print s}}' ) '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,sum,$7,$8}}' > {output.intersect_tsv} \n"
+		"{reference_dir}/../scripts/duplicate_reads.pl {input.bam} {output.intersect_tsv}   >> {output.count_dups_tsv} \n" 
+		
+
+#STAR 
+#Get the number of reads at each unique start position, ie. pcr duplicates
+#Get regions coveredby distinct reads/readgroups. Columns are: chr	start	end	depth_of_coverage. depth_of_coverage won't be used
+#Merge neighboring reads into HATseq peaks. Columns are: chr	start	end	arbitrary_peak_name	
+#Get the number of reads in the bam and the number of reads in each peaks and number of unique start positions in each peak
+
+rule genCov_STAR:
+	input:
+		#ref_gen = reference_dir + "/human_g1k_v37.genome",
+		bam = contig_star_sorted_minlength_maxmismatch_bam
+	output:
+		sorted_plus = star_gen_cov_plus_bed,
+		sorted_minus = star_gen_cov_minus_bed,
+		merged_plus = star_merged_plus,
+		merged_minus = star_merged_minus,
+		#intersect_tsv = star_intersect_tsv,
+		#dup_tsv = star_dups_tsv
+	params:
+		distance = 100
+	resources:
+		runtime = 360
+	shell:
+		#"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\tfw_start,end\trv_start,end' > {output.dup_tsv} \n"
+		"genomeCoverageBed -ibam {input.bam}  -bg -strand \"+\" | sortBed -i - > {output.sorted_plus} \n"
+            	"genomeCoverageBed -ibam {input.bam}  -bg -strand \"-\" | sortBed -i - > {output.sorted_minus} \n"
+            	"mergeBed -i  {output.sorted_plus} -c 1 -o count |  awk -v name={te_name} '{{OFS =\"\\t\"; print $1,$2,$3,name\"-STAR-plus-\"NR,$4,\"+\"}}' > {output.merged_plus} \n"
+            	"mergeBed -i  {output.sorted_minus} -c 1 -o count | awk -v name={te_name} '{{OFS =\"\\t\"; print $1,$2,$3,name\"-STAR-minus-\"NR,$4,\"-\"}}' > {output.merged_minus} \n"
+            	#"cat <(intersectBed -wa -wb -s -a <(bamToBed -i {input.bam}) -b {output.merged_plus} | {reference_dir}/../scripts/count_reads.pl - ) <(intersectBed -wa -wb -s -a <(bamToBed -i {input.bam}) -b {output.merged_minus} | {reference_dir}/../scripts/count_reads.pl - )  | sort -k4,4V -u  | awk -v sum=$(samtools idxstats {input.bam} | awk -F '\t' '{{s+=$3+$4}}END{{print s}}' ) '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,sum,$7,$8}}' > {output.intersect_tsv} \n"
+            	#"{reference_dir}/../scripts/duplicate_reads.pl {input.bam} {output.intersect_tsv} >> {output.dup_tsv} \n"
+		#"{reference_dir}/../scripts/duplicate_reads.pl {input.bam} {output.intersect_tsv}  >> {output.dup_tsv} \n" # awk '{{if ($1 ~ !/_/) {{print}}}}'
+
+
+#insert bwa rescue here
+rule rescue_long_fragments:
+	input:
+		raw_bwa_bam = pe_bwa_bam,
+                STAR_bam = contig_star_sorted_minlength_maxmismatch_bam , #star_realign_bam,
+                #all_passing_peaks =  #pass_all,
+		merged_plus = star_merged_plus,
+                merged_minus = star_merged_minus,
+                unassembled_read_list = pear_unassembled_reads,
+		ref = hg38
+	output:
+        	bwa_rescue_bam = bwa_rescue_bam,
+                merged_bam = merged_bam,
+                merged_bam_index = merged_bam_index,
+                #bwa_rescue_count_dups = bwa_rescue_count_dups
+                intersect_tsv = star_intersect_tsv,
+                dup_tsv = star_dups_tsv
+        #params:
+	shell:
+                "samtools view -b -h -N {input.unassembled_read_list} {input.raw_bwa_bam} | samtools sort - | samtools view -L $(cat {input.merged_plus} {input.merged_minus} | slopBed -g {input.ref} -s -l 100 -i stdin) -  > {output.bwa_rescue_bam} \n"
+                #"samtools sort Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue.bam > Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue_sorted.bam \n"
+                "samtools merge -o {output.merged_bam} {input.STAR_bam} {output.bwa_rescue_bam} && samtools index {output.merged_bam} \n"
+                #"{reference_dir}/../scripts/duplicate_reads.pl {output.merged_bam} <(cat {input.merged_plus} {input.merged_minus} | sort -k1,1 -k2,2n ) > {output.bwa_rescue_count_dups} \n"
+		"cat <(intersectBed -wa -wb -s -a <(bamToBed -i {output.merged_bam}) -b {input.merged_plus} | {reference_dir}/../scripts/count_reads.pl - ) <(intersectBed -wa -wb -s -a <(bamToBed -i {output.merged_bam}) -b {input.merged_minus} | {reference_dir}/../scripts/count_reads.pl - )  | sort -k4,4V -u  | awk -v sum=$(samtools idxstats {output.merged_bam} | awk -F '\t' '{{s+=$3+$4}}END{{print s}}' ) '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,sum,$7,$8}}' > {output.intersect_tsv} \n"
+                #"{reference_dir}/../scripts/duplicate_reads.pl {input.bam} {output.intersect_tsv} >> {output.dup_tsv} \n"
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\tfw_start,end\trv_start,end' > {output.dup_tsv} \n"
+                "{reference_dir}/../scripts/duplicate_reads.pl {output.merged_bam} {output.intersect_tsv}  >> {output.dup_tsv} \n"
+
+#Bwa 
+#Leaving for now, but probably will need to modify this, at least with originally done hg38 repeat masker reference
+rule find_overlaps_and_filter_bwa: 
+	input:
+		beds = line_family_beds,
+		ref = hg38,
+		tsv = bwa_dups_tsv,
+        	Evrony_KR = Evrony_KR ,
+	        repeat_masker = repeat_masker,
+        	repeat_files = repeat_files
+	output:
+		tsvs = bwa_line_family_overlap_tsvs,
+	        L1HS_bed = bwa_L1HS_overlap_tsv,
+        	Evrony_overlap_tsv = bwa_L1HS_Evrony_overlap_tsv,
+	        repeat_overlap_tsv = bwa_repeat_overlap_tsv,
+        	no_overlap_tsv = bwa_no_overlap_tsv
+	threads: 4
+	resources:
+		runtime = 60,
+		mem_mb = 5000
+	shell:
+		"beds=( {input.beds} ) \n" 
+		"tsvs=( {output.tsvs} ) \n"
+		"for i in ${{!beds[@]}} ; do echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tchr_L1\tstart_L1\tend_L1\tTE_L1\tovlp_name\tstrand_L1\tpeak_width\tovlp_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths' > ${{tsvs[i]}} ; intersectBed -wo -b <(slopBed -i ${{beds[i]}} -g {input.ref} -l 0 -r 30 -s) -a {input.tsv} | awk '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6,$13,$14,$15,$16,$16\"_chr\"$13\"_\"$15,$18,$3-$2,$19,$7,$8,$9,$10}}' >> ${{tsvs[i]}} ; done \n" 
+ 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tchr_L1\tstart_L1\tend_L1\tTE_L1\tovlp_name\tstrand_L1\tpeak_width\tovlp_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\tchr_Evrony\tstart_Evrony\tend_Evrony\tname_Evrony\twidth_Evrony\tstrand_Evrony' > {output.Evrony_overlap_tsv} \n"
+		"intersectBed -loj -a {output.L1HS_bed} -b {input.Evrony_KR} >> {output.Evrony_overlap_tsv} \n"
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths' > {output.repeat_overlap_tsv} \n " 
+		"intersectBed -wao -b {input.repeat_masker} -a <(cut -f 1-10 {input.tsv}) | awk '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6,$11,$12,$13,$14,$14\"_chr\"$11\"_\"$13,$16,$3-$2,$17,$7,$8,$9,$10}}' | bedtools groupby -g 1,2,3,4,5,6,13,15,16,17,18 -c 10,14 -o collapse,collapse > {output.repeat_overlap_tsv} \n" 
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths' > {output.no_overlap_tsv} \n"
+		"intersectBed -v -b <(slopBed -i <(cat {input.repeat_files}) -g {input.ref} -l 0 -r 30 -s) -a {output.repeat_overlap_tsv} >> {output.no_overlap_tsv} \n"
+
+#STAR 
+rule overlap_L1subfam_STAR:
+	input:
+		beds = line_family_beds,
+		ref = hg38,
+		tsv = star_dups_tsv ,
+		Evrony_KR = Evrony_KR ,
+		repeat_masker = repeat_masker , 
+		repeat_files = repeat_files,
+		homopolymers  = homopolymers, 
+		hg38 = hg38, 
+		#eul1db = eul1db,
+		i1kgp = i1kgp,
+		#Evrony_KNR = Evrony_KNR, 
+		#tebreak = tebreak,
+		gnomad = gnomad,
+		nyuwa = nyuwa , 
+		bam = merged_bam #contig_star_sorted_minlength_maxmismatch_bam
+	output:
+		tsvs = star_line_family_overlap_tsvs,
+		L1HS_bed = star_L1HS_overlap_tsv,
+		Evrony_overlap_tsv = star_L1HS_Evrony_overlap_tsv ,
+		repeat_overlap_tsv = star_repeat_overlap_tsv,
+		no_overlap_tsv = star_no_overlap_tsv ,
+		overlap_hmply_tsv = star_overlap_hmply_tsv ,
+		intersect_KNR_tsv = star_intersect_KNR_tsv,
+		overlap_KNR_tsv = star_overlap_KNR_tsv ,
+		no_overlap_KNR_tsv = star_no_overlap_KNR_tsv,
+		readIDs_no_overlap_KNR_nonPCRdup = readIDs_no_overlap_KNR_nonPCRdup,
+		readIDs_no_overlap_KNR = readIDs_no_overlap_KNR
+	threads: 4
+	resources:
+		runtime = 60,
+		mem_mb = 5000
+	shell:
+		"beds=( {input.beds} ) \n"
+		"tsvs=( {output.tsvs} ) \n"
+        	"for i in ${{!beds[@]}} ; do echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tchr_L1\tstart_L1\tend_L1\tTE_L1\tovlp_name\tstrand_L1\tpeak_width\tovlp_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths' > ${{tsvs[i]}} ; intersectBed -wo -S -b <(slopBed -i ${{beds[i]}} -g {input.ref} -l 0 -r 200 -s) -a <(cut -f 1-10 {input.tsv}) | awk '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6,$13,$14,$15,$16,$16\"_chr\"$13\"_\"$15,$18,$3-$2,$19,$7,$8,$9,$10}}' >> ${{tsvs[i]}} ; done \n"
+ 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tchr_L1\tstart_L1\tend_L1\tTE_L1\tovlp_name\tstrand_L1\tpeak_width\tovlp_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\tchr_Evrony\tstart_Evrony\tend_Evrony\tname_Evrony\twidth_Evrony\tstrand_Evrony' > {output.Evrony_overlap_tsv} \n"
+		"intersectBed -loj -S -a {output.L1HS_bed} -b {input.Evrony_KR} |  awk '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$19,$20,$21,$22,$23,$24,$13,$14,$15,$16,$17,$18}}' >> {output.Evrony_overlap_tsv} \n"
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths' > {output.repeat_overlap_tsv} \n " 
+		#"echo debug_1 \n"
+		"intersectBed -wao -S -b <(slopBed -i {input.repeat_masker} -g {input.ref} -l 0 -r 200 -s | sed -e 's/\t*$//') -a <(cut -f 1-10 {input.tsv} | sed -e 's/\t*$//') | awk '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6,$11,$12,$13,$14,$14\"_chr\"$11\"_\"$13,$16,$3-$2,$17,$7,$8,$9,$10}}' | bedtools groupby -g 1,2,3,4,5,6,13,15,16,17,18 -c 10,14 -o collapse,collapse >> {output.repeat_overlap_tsv} \n"
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths' > {output.no_overlap_tsv} \n"
+		"intersectBed -v -b <(slopBed -i <(cat {input.repeat_files}) -g {input.ref} -l 0 -r 200 -s) -a {output.repeat_overlap_tsv} >> {output.no_overlap_tsv} \n"	
+		"echo '#chr\tstart\thmply_name' > {output.overlap_hmply_tsv} \n"
+		"intersectBed -loj -a <( awk '{{OFS=\"\\t\";if ($6 == \"-\" && $2 >= 20) {{print $1,$2-20,$2+20}} else if ($6 == \"-\" && $2 < 20) {{print $1,0,$2+20}} else if ($6 == \"+\" && $3 >=20) {{print $1,$3-20,$3+20}}  else if ($6 == \"+\" && $3 < 20) {{print $1,0,$3+20}} }}' {output.no_overlap_tsv} )  -b  {input.homopolymers} | bedtools groupby -g 1,2,3 -c 7 -o collapse | sortBed -i stdin >> {output.overlap_hmply_tsv} \n"
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths\tmrip_accession.no_eul1db\tpseudoallelefreq_eul1db\tstrand_eul1db\tname_i1kgp\tallelefreq_i1kgp\tinfo_i1kgp\tname_Evrony\tstrand_Evrony\tTE_tebreak\tstrand_tebreak\tinfo_tebreak\tname_hmply\tname_gnomad\tallelefreq_gnoma\tinfo_gnomad' > {output.intersect_KNR_tsv}  \n"
+		#"echo debug_2 \n"
+		#"intersectBed -loj -a <(slopBed -b 500 -i {output.no_overlap_tsv} -g {input.hg38}) -b {input.eul1db} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13 -c 17,18,19 -o collapse,collapse,collapse | intersectBed -loj -a stdin -b {input.i1kgp} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 -c 20,21,22 -o collapse,collapse,collapse | intersectBed -loj -a stdin -b {input.Evrony_KNR} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19 -c 23,25 -o collapse,collapse | intersectBed -loj -a stdin -b {input.tebreak} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21 -c 25,26,27 -o collapse,collapse,collapse | intersectBed -loj -a stdin -b {output.overlap_hmply_tsv} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24 -c 28 -o collapse | intersectBed -loj -a stdin -b {input.gnomad} | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25 -c 29,30,31 -o collapse,collapse,collapse >> {output.intersect_KNR_tsv} \n"
+		"intersectBed -loj -a {output.no_overlap_tsv}  -b <( slopBed -b 500 -i {input.i1kgp} -g {input.hg38}) | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13 -c 17,18,19 -o collapse,collapse,collapse | intersectBed -loj -a stdin -b <( slopBed -b 500 -i {output.overlap_hmply_tsv} -g {input.hg38}) | bedtools groupby -g  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 -c 20 -o collapse | intersectBed -loj -a stdin -b <(slopBed -b 500 -i {input.gnomad} -g {input.hg38})  | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 -c 21,22,23 -o collapse,collapse,collapse | intersectBed -loj -a stdin -b <(slopBed -b 500 -i {input.nyuwa} -g {input.hg38})  | bedtools groupby -g 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 -c 24,25,26 -o collapse,collapse,collapse  >> {output.intersect_KNR_tsv} \n" #This is the command that annotates KNR  
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks\tstrand\tpeak_width\tnum_bam_reads\tnum_peak_reads\tnum_usp\tusp_depths\trepeat_name\trepeat_ovlp_widths\tname_hmply' > {output.no_overlap_KNR_tsv} \n"
+		"awk '$14 !~ /LINE1/ &&  $18 !~/LINE1/ && $21 !~ /LINE1/' {output.intersect_KNR_tsv} | awk '{{OFS=\"\t\";print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}}' >> {output.no_overlap_KNR_tsv} \n" #removed ,$25,$NF
+        	"intersectBed -v -header -a {output.intersect_KNR_tsv} -b {output.no_overlap_KNR_tsv} > {output.overlap_KNR_tsv} \n" # might need to switch to the awk version? 
+		"echo '#chr\tstart\tend\tread_name\tpeak_name\tstrand' > {output.readIDs_no_overlap_KNR_nonPCRdup} \n"
+		"echo '#chr\tstart\tend\tread_name\tstrand\tpeak_name' > {output.readIDs_no_overlap_KNR} \n" #saving all read IDs not just hte subset that blat gets run on 
+		"intersectBed -wo -s -abam {input.bam} -b <(awk '$9 !=\"1\"' {output.no_overlap_KNR_tsv}  ) -bed | cut -f 1-6,13- | sort -k10,10V -k1,3n | cut -f 1,2,3,4,6,10 >> {output.readIDs_no_overlap_KNR} \n"
+		"bedtools groupby -g 6,1,2,3,5 -c 4 -o first -i {output.readIDs_no_overlap_KNR} |  awk '{{OFS=\"\\t\"; print $2,$3,$4,$6,$1,$5}}' >> {output.readIDs_no_overlap_KNR_nonPCRdup} \n" 
+		
+
+#Module 6 : Apply filters 
+
+rule run_blat_gmotif:
+	input:
+		combined_fq = combined_trimmed_lowqual_unmap_contigs,
+		tsv =  readIDs_no_overlap_KNR_nonPCRdup,
+	        tsv_full = readIDs_no_overlap_KNR,
+		read_IDs = star_no_overlap_KNR_tsv,
+		ref = ref_genome,
+		combined_fq_contig = assembled_trimmed_contigs  #combined_trimmed_lowqual_unmap_contigs
+	output:
+		sub_fa = no_overlap_KNR_nonPCRdup_fasta,
+		blat_out = blat_out_table, 
+        	filtered_out = blat_out_table_filtered_out,
+		tsv = readIDs_no_overlap_KNR_nonPCRdup_nodups,
+		intersect =  blat_intersect,
+		filtered_ID = gmotif_filtered_ID
+	threads: 8
+	resources:
+		runtime = 1000,
+		mem_mb = 40000
+	params:
+		stepSize=5,
+		tileSize=11,
+		minMatch=1,
+		repMatch=2253,
+		minScore=20,
+		minIdentity=0.9,
+		out="blast8"
+	shell:
+		"seqtk subseq {input.combined_fq} <(cut -f 4 {input.tsv}) | seqtk seq -a - > {output.sub_fa} \n" 
+		"echo debug 1 \n"
+		"pblat -threads={threads} -stepSize={params.stepSize} -tileSize={params.tileSize} -minMatch={params.minMatch} -repMatch={params.repMatch} -minScore={params.minScore} -minIdentity={params.minIdentity} -noHead -out={params.out} {input.ref} {output.sub_fa} {output.blat_out} \n"
+		"echo debug 2\n"
+		"echo '#read_name\tchr\tpercent_identical\tlength\tmismatch\tgapopen\tqstart\tqend\tsstart\tsend\tevalue\tbitscore' >  {output.filtered_out} \n"
+		"echo debug 3 \n"
+		"cat {output.blat_out} | awk '$3>95 && $4<200' | sort -k1,1 -k12,12nr | sort -u -k1,1  >> {output.filtered_out} \n"
+		"echo debug 4 \n"
+		"echo '#peak_name\tread_support' > {output.tsv} \n"
+		"echo debug 5 \n"
+		"cut -f 5 {input.tsv} | sort -V | uniq -c | awk '{{OFS=\"\\t\";print $2,$1}}' >> {output.tsv} \n" #columns of the temporary b file for intersecting : chr  start end readid length_of_alignment strand
+		"echo '#peak_name\tpassing_read_support' > {output.intersect} \n" 
+		"intersectBed -wo -s -a  {input.tsv} -b <(tail -n +2 {output.filtered_out} | awk '{{OFS=\"\\t\"; if ($9<$10) {{print $2,$9,$10,$1,$4,\"+\"}} else if ($9>$10) {{print $2,$10,$9,$1,$4,\"-\"}}}}' | sortBed -i -) | awk '$4==$10'| cut -f 5 | sort -V | uniq -c | awk '{{OFS=\"\\t\";print $2,$1}}' >>  {output.intersect} \n"
+		"seqtk subseq {input.combined_fq_contig} <(cut -f 4 {input.tsv_full}) | seqtk seq -a - | grep 'ACTCTAAG' -B 1 | seqkit seq -i -n -  > {output.filtered_ID} \n"
+
+rule filter_blat_gmotif:
+	input:
+		read_IDs = star_no_overlap_KNR_tsv,
+		readIDs_no_overlap_KNR = readIDs_no_overlap_KNR,
+		nonPCRdup_full = readIDs_no_overlap_KNR_nonPCRdup,
+		nonPCRdup_peaks = readIDs_no_overlap_KNR_nonPCRdup_nodups,
+		intersect = blat_intersect,
+		#blat_30 = blat_30 ,
+		#blat_noshow = blat_noshow,
+		#blat_np = blat_np,
+		#pass_readIDs = blat_pass_readIDs,
+		#nopass_readIDs = blat_nopass_readIDs,
+		filtered_ID = gmotif_filtered_ID
+	output:
+		big_table = big_table,
+		blast_read_list  = blast_read_list
+	#params:
+		#big_table = big_table
+	threads: 1
+	resources:
+		runtime = 20,
+		mem_mb = 2000
+	run:  
+		peaks = pd.read_table(input.nonPCRdup_peaks,header=0, sep="\t")
+		pass_peaks = pd.read_table(input.intersect, header=0, sep="\t")
+		pass_g = pd.read_table(str(input.filtered_ID), header=None, sep="\t")
+		#reads = pd.read_table(input.nonPCRdup_full, header=0, sep="\t")
+		reads = pd.read_table(input.readIDs_no_overlap_KNR, header=0, sep="\t")
+		#reads_full = pd.read_table(input.readIDs_no_overlap_KNR, header=0,sep="\t")
+		#Rename columns in bed file format 
+		peaks.columns = peaks.columns.str.lstrip('#') 
+		pass_peaks.columns = pass_peaks.columns.str.lstrip('#') 
+		reads.columns = reads.columns.str.lstrip('#') 
+		#reads_full.columns = read_full.columns.str.lstrip('#')
+		pass_g.columns = ['read_name']
+		pass_g['gmotif'] = 'pass'
+		#reads_full = reads_full['read_name', '
+		
+	
+		#Merge and annotate tables
+		reads = reads.merge(peaks, how="left", on="peak_name" ) #There should not be any null cells after this, sets of peak names should be equivalent between reads full table and all peaks table
+		annotated = pd.merge(reads,pass_peaks,how="outer",on="peak_name").fillna(0) #Empty cells after this step need a 0 value to indicate that they had no passing peaks 
+		annotated['pass_percent'] = annotated['passing_read_support']/annotated['read_support']
+		annotated['blat'] = 'NA'
+		annotated.loc[annotated['pass_percent'] >= 0.3, 'blat'] = 'pass'
+		annotated.loc[annotated['pass_percent'] < 0.3, 'blat'] = 'no_pass' # these lines will not work probably 
+		annotated = pd.merge(annotated,pass_g,how="outer",on="read_name").fillna('no_pass')
+		#big_table = pd.merge(reads_full,annotated,how="outer",on="peak_name").fillna("no
+		annotated.to_csv(output.big_table,sep="\t", na_rep = "NA",header=True, index=False)
+		pass_both = annotated[(annotated['blat'] == 'pass') & (annotated['gmotif'] == 'pass')] 
+		pass_both[['read_name','peak_name']].to_csv(output.blast_read_list,sep="\t",header=True, index=False)
+		
+		
+rule run_blast:
+	input:
+		#big_table = big_table,
+		fastq = assembled_trimmed_contigs,
+		blast_read_list  = blast_read_list
+	output:
+                chimera = chimera,
+                nonchimera = nonchimera 
+	#params:
+	#	big_table = big_table
+	resources:
+		mem_mb = 60000,
+		runtime = 1000	
+	threads: 8
+	shell:
+		"ulimit -n 4096 \n"
+		"python {reference_dir}/../scripts/chimera.v38.2.4.O2.S2.py {input.fastq} <(tail -n +2 {input.blast_read_list} | uniq) {threads}  {output.chimera} {output.nonchimera} {sample_name} \n" 
+
+rule filter_blast:
+	input:
+		big_table = big_table, #big_table, #temporarily modifying to gmotif big table because we have un-updated results
+		blast_read_list = blast_read_list,
+		fq = assembled_trimmed_contigs,
+		#pass_g = gmotif_filtered_out,
+		chimera = chimera,
+		nonchimera = nonchimera,
+		peak_locations = star_intersect_tsv 
+	output:
+		pass_bla = pass_blast,
+		pass_bla_peaks = pass_blast_peaks,
+		big_table = big_table_blast
+	params:
+		tmpdir_prefix = blast_prefix + ".",
+		first_key = 4,
+		second_key = 1
+		#big_table = big_table_blast
+	threads: 4
+	resources: 
+		runtime = 2400,
+		mem_mb = 10000
+	run:
+		#Read in tables and rename columns
+		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None)
+		nonchimera.columns = ['read_name']
+		nonchimera['blast'] = 'pass'
+		annotated = pd.read_table(input.big_table, sep="\t", header=0)
+		peak_locations = pd.read_table(input.peak_locations, sep="\t", header=None)
+		peak_locations.columns = ['chr','start','end','peak_name','num_subpeaks','strand','num_bam_reads','num_peak_reads','num_usp']
+		#peak_locations.columns = peak_locations.columns.str.strip("#")
+		#Get the peak names that pass blast, only need one passing read to pass blast ? also questionable because we only check at most 2 reads from any peak 
+		pass_peaks = pd.merge(annotated, nonchimera, how="outer",on="read_name").fillna('NA')
+		print(pass_peaks.columns)
+		pass_peaks = pass_peaks[['peak_name','blast']][pass_peaks['blast'] == 'pass'].drop_duplicates()  #this will not work 
+		
+		#Annotate full list of reads
+		annotated = pd.merge(annotated, pass_peaks, how="outer", on ="peak_name").fillna("no_pass")
+		annotated.to_csv(output.big_table, sep="\t",header=True,na_rep="NA",index=False) #won't have bedtools grouby count output though, can run after  
+		annotated[(annotated['blat'] == 'pass') & (annotated['gmotif'] == 'pass') & (annotated['blast'] == 'pass')].to_csv(output.pass_bla , sep="\t",header=True, na_rep= "NA",index=False)
+		peak_locations = pd.merge(peak_locations,annotated[['peak_name']][(annotated['blat'] == 'pass') & (annotated['gmotif'] == 'pass') & (annotated['blast'] == 'pass')],how="left",on="peak_name")
+		peak_locations.to_csv(output.pass_bla_peaks, header=True,na_rep="NA",index=False,sep="\t")
+
+rule run_realign_NN: 
+	input:
+		ref = STAR_genome,
+		fq = combined_trimmed_lowqual_unmap_contigs,
+		pass_bla = pass_blast ,
+		fastq =  adapter_trimmed_fastq2,
+		pass_bla_peaks = pass_blast_peaks
+	output:
+		sub_fq = star_realign_fastq,
+		bam = star_realign_bam,
+		bai = star_realign_bam_bai,
+        	tsv = star_realign_dups_tsv,
+		subseqedfq = preNN_fastq,
+		trimmed = NN_trimmed_fastq,
+		report =  NN_report ,
+		NN_list = NN_list
+	params:
+		name = bam_path + "_STAR.realign." ,
+                cores = cores,
+                matchN = 0.3,
+                score = 0.3,
+                RG_ID = "ID:TE_" + te_name +  " SM:" + sample_name + " PL:illumina LB:TE_insertion CN:Macrogen",
+                gap = -4,
+                gapGCAG = -4,
+                gapATAC = -4,
+                alignIntronMax = 500,
+		outSAMtype = "BAM SortedByCoordinate",
+		chimOutType = "WithinBAM SoftClip",
+		chimSegmentMin = 10 , 
+		chimFilter = "None",
+		readFileCommand = "zcat",
+		adapter = index + "GGGAGATATACCTAATGCTAGATGACAC"  
+	threads: 4
+	resources:
+		runtime = 2400,
+		mem_mb = 100000
+	shell: 
+		"seqtk subseq {input.fq} <( cut -f 4 {input.pass_bla} | sort | uniq) | gzip - > {output.sub_fq} \n"
+		"STAR --runThreadN {params.cores} --genomeDir {input.ref} --readFilesIn {output.sub_fq} --outFileNamePrefix {params.name} --outFilterMatchNminOverLread {params.matchN} --outFilterScoreMinOverLread {params.score} --outSAMattrRGline {params.RG_ID} --scoreGapNoncan {params.gap} --scoreGapGCAG {params.gapGCAG} --scoreGapATAC {params.gapATAC} --alignIntronMax {params.alignIntronMax} --outSAMtype {params.outSAMtype} --chimOutType {params.chimOutType} --chimSegmentMin {params.chimSegmentMin} --chimFilter {params.chimFilter} --readFilesCommand {params.readFileCommand} \n" 
+		"sambamba index {output.bam} \n"	
+		"perl {reference_dir}/../scripts/duplicate_reads.pl {output.bam} <(tail -n +2 {input.pass_bla_peaks} | awk  '{{OFS=\"\\t\";print $1,$2,$3,$4,$5,$6}}'  | sort -V | uniq) | cut -f 4,7-  | awk -F '\t' '{{OFS=\"\\t\";if ($2==\"\") {{print $1,\".\",$3,$4}} else {{print $0}}}}' | awk '{{split($(NF-2),a,\",\");if (a[1]>1) print}}' > {output.tsv} \n" #filtered pcr pass peaks
+		"seqtk subseq {input.fastq} <(cut -f 4 {input.pass_bla}) | gzip - > {output.subseqedfq} \n"
+		"cutadapt -a {params.adapter} -o {output.trimmed} {output.subseqedfq} > {output.report} \n"
+		"seqkit seq -i {output.trimmed} | seqtk seq -a - | awk '{{if (NR%2) {{printf \"%s%s\", $0 , \"\\t\" }} else {{printf \"%s%s\", $0, \"\\n\" }}}}' | grep '^>' | cut -b2-  > {output.NN_list} \n "
+
+rule filter_pcrdup_nn:
+	input: 
+		big_table = big_table_blast, #briefly modifying for the sake of not having to rerun blat
+		fastq =  adapter_trimmed_fastq2,
+		#pass_pcr = star_big_table, #star_realign_dups_tsv,
+		tsv = star_realign_dups_tsv,
+		NN_list = NN_list,
+		star_dups = star_dups_tsv, 
+		readIDs_no_overlap_KNR = readIDs_no_overlap_KNR
+	output:
+		#trimmed = NN_trimmed_fastq,
+		#report =  NN_report , 
+		#NN_tsv =  NN_tsv,
+		#full_NN_tsv = full_NN_tsv,
+		#pass_NN = pass_NN,
+		#subseqedfq = preNN_fastq,
+		pass_all = pass_all,
+		#unk_calling = unk_calling
+	params:
+		big_table = star_big_table,
+		adapter = index + "GGGAGATATACCTAATGCTAGATGACAC" , 
+		key1 = 4,
+		key2 = 2,
+		key3 = 10
+	run:
+		#Read tables and get headers
+		pcr_pass = pd.read_table(input.tsv, header=None, sep="\t")
+		pcr_pass = pcr_pass[[0]]
+		pcr_pass.columns = ['peak_name']
+		pcr_pass['pcr_duplicates'] = 'pass'
+		annotated = pd.read_table(input.big_table, sep="\t", header=0)
+		ntag = pd.read_table(input.NN_list, header=None, sep="\t")
+		ntag.columns = ['read_name', 'ntag']
+		reads = pd.read_table(input.readIDs_no_overlap_KNR, header=0,sep="\t")
+		reads.columns = reads.columns.str.lstrip('#')	
+		#Merge tables and annotate
+		ntag = pd.merge(reads,ntag, how="outer", on="read_name").fillna("0")
+		ntag = ntag[ntag['ntag'] != "0"]
+		ntag_full = ntag.groupby(['peak_name'])['ntag'].apply(','.join).reset_index()
+		#ntag_full = ntag[ntag['ntag'] != '0']
+		#ntag_pass = ntag_full.loc[ntag_full['peak_name'].duplicated()] #ntag_pass = ntag_full.loc[ntag_full['peak_name'].duplicated(), 'peak_name']
+		type(ntag_full['ntag'])
+		print(ntag_full)
+		ntag_pass = ntag_full[ntag_full['ntag'].str.contains(',')]
+		ntag_pass['ntag'] = 'pass'
+		print(ntag_pass)
+		ntag_pass = ntag_pass.drop_duplicates() #['peak_name']
+		#ntag_pass['ntag'] = 'pass'
+		annotated = pd.merge(annotated,pcr_pass, on='peak_name').fillna("no_pass")
+		annotated = pd.merge(annotated,ntag_pass, on='peak_name').fillna("no_pass")
+
+		annotated.to_csv(params.big_table,sep="\t",header=True, na_rep="NA", index=False)
+		annotated[(annotated['blat'] == 'pass') & (annotated['gmotif'] == 'pass') & (annotated['blast'] == 'pass') & (annotated['pcr_duplicates'] == 'pass') & (annotated['ntag'] == 'pass') ].to_csv(output.pass_all, header=True, na_rep="NA", index=False,sep="\t")
+		star_dups = pd.read_table(input.star_dups, header=0, sep="\t")
+		joined = annotated.merge(star_dups, how="left", on="peak_name") 
+		#unk_calling = joined[['chr','start_y','end_y','peak_name','num_peak_reads', 'strand_x', 'num_bam_reads', 'usp_depths']].drop_duplicates()		
+		#unk_calling.to_csv(output.unk_calling, header=True, index=False, sep="\t") 
+
+#rule rescue_long_fragments:
+#	input:
+#		raw_bwa_bam = pe_bwa_bam, 
+#		final_STAR_bam = star_realign_bam,
+#		all_passing_peaks = pass_all,
+#		unassembled_read_list = pear_unassembled_reads
+#	output:
+#		bwa_rescue_bam = bwa_rescue_bam,
+#		merged_bam = merged_bam,
+#		merged_bam_index = merged_bam_index,
+#		bwa_rescue_count_dups = bwa_rescue_count_dups
+#	params:
+#	shell: 
+#		"samtools view -b -h -N {input.unassembled_read_list} {input.raw_bwa_bam} | samtools sort - > {output.bwa_rescue_bam} \n"
+		#"samtools sort Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue.bam > Bulk_S8_batch2_ds90_L1HS_bwa_pe_rescue_sorted.bam \n"
+#		"samtools merge -o {output.merged_bam} {input.final_STAR_bam} {output.bwa_rescue_bam} && samtools index {output.merged_bam} \n" 
+#		"{reference_dir}/../scripts/duplicate_reads.pl {output.merged_bam} <(tail -n +2 {input.all_passing_peaks} | awk '{{OFS=\"\t\"; print $1,$2,$3,$4,$6,$5}}' | sort -k 1,1 -k2,2n | mergeBed -s -i stdin -c 4,5,6 -o count_distinct,distinct,distinct ) > {output.bwa_rescue_count_dups} \n"
+
+	 
