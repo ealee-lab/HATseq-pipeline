@@ -2,38 +2,5 @@ __default__:
     time: 360 # in min
     threads: 1
     mem: 2000 # in MB
-get_unmap_nolowqual_list:
-    mem: 10000
-bwa_PE:
-    time: 5740
-    #threads: 4
-    mem: 30000
-pear:
-    time: 1020
-    #threads: 4 
-    mem: 40000
-bwa_contig:
-    time: 1240
-    #threads: 4
-    mem: 30000
-star:
-    time: 1240
-    #threads: 4
-    mem: 60000
-genCov_STAR:
-    time: 360
-    mem: 2000
-blat_filter:
-    time: 560
-    mem: 30000
-blast_filter:
-    cores: 8
-    time: 360 
-    mem: 40000
-read_blast:
-    time: 120
-    mem: 1000
-get_Intermediate:
-    mem: 3000
-run_blast:
-    time: 1000
+    output: /path/to/HATseq-pipeline/workflow/slurm/Hatseq_job_%j.out
+    partition: your_partition

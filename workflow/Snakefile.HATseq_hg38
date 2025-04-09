@@ -12,6 +12,7 @@ import re
 import math
 import gzip 
 import statistics
+
 #Read config variables 
 output_dir = config["output_dir"]
 tmp_dir = config["tmp_dir"]
@@ -29,29 +30,22 @@ library = config["library"]
 sequencing_platform = config['sequencing_platform']
 sequencing_center = config['sequencing_center']
 
-#Create lists of subfamilies
-#LINE_FAMILIES=["L1HS" ,"L1PA2" , "L1PA3" , "L1PA4" , "L1PA5"] #All
-#LINE_FAMILIES_FILTER=["L1HS" ,"L1PA2" , "L1PA3" , "L1PA4"] #Closest 
-
-#List of reference files
-#KR
-#line_family_beds = expand( reference_dir +"/RepeatMasker/" + "hg38.repeatmasker.v37.{line_family}.bed.chr.bed" , line_family=LINE_FAMILIES) # This might not work outside the snakemake rules
+#Create reference file variables 
 Evrony_KR = reference_dir + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
 repeat_masker = reference_dir + "/RepeatMasker/repeatmasker.v38.bed"
-#repeat_files =  expand(reference_dir +"/RepeatMasker/hg38.repeatmasker.v37.{line_family}.bed.chr.bed", line_family=LINE_FAMILIES_FILTER)
 repeat_masker_L1HS = reference_dir + "/RepeatMasker/repeatmasker.v38.L1HS.bed"
 homopolymers = reference_dir + "/human/hg38.hg19.homo8.chr.bed" #Lifted over
 hg38 = reference_dir + "/human/hg38.genome"
 L1HS_decoy = reference_dir + "/L1HS_decoy_sequence.fasta"
-#KNR
 i1kgp = reference_dir + "/1kgp/1kgp.AF.ME.final.hg38.bed"
 i1kgp_LINE1 = reference_dir + "/1kgp/1kgp.AF.ME.final.hg38.LINE1.bed"
-gnomad = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" #gnomad_v2_MEI.sites_hg19.revised.bed"
+gnomad = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" 
 gnomad_LINE1 = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.LINE1.bed"
 nyuwa = reference_dir + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
 nyuwa_LINE1 = reference_dir + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.LINE1.bed"
-
 segdups = reference_dir + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
+
+
 #Set output paths 
 analysis_path = output_dir + "/" + "analysis" + "/" + sample_name + "_"
 results_path = output_dir + "/" + "results" + "/" + sample_name + "_"
@@ -126,8 +120,9 @@ transduction_support = analysis_path + "transduction_support.tsv"
 igv_script = analysis_path + "igv.sh"
 summary_file = analysis_path + "summary.txt"
 chimera_hash = analysis_path + "chimera_hash.txt"
-#Define rules 
 
+
+#Define rules 
 rule HATseq:
 	input:
 		peaks,

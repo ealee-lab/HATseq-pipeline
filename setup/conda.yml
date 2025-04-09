@@ -1,24 +1,19 @@
-name: HATseq
+name: HATseq2
 channels:
  - conda-forge
  - bioconda
- - free
+ - defaults
 dependencies:
- - python=3.7
- - bioconda::snakemake
- - conda-forge::numpy=1.21
+ - python=3.8
+ - snakemake
+ - numpy=1.21
  - pandas
- - bioconda::pysam
- - bioconda::samtools
- - bioconda::cutadapt
- - bioconda::bedtools=2.27.1
- - bioconda::pear
- - bioconda::samblaster
- - bioconda::pblat
- - bioconda::fastqc
- - bioconda::fastq-screen
- - bioconda::bowtie2
- - bioconda::sambamba
- - bioconda::bwa
- - bioconda::star=2.7.0d
- - bioconda::blast-legacy
+ - fastp
+ - pysam
+ - samtools
+ - cutadapt
+ - bedtools=2.27.1
+ - samblaster
+ - fastqc
+ - sambamba
+ - bwa

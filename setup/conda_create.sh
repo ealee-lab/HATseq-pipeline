@@ -1,3 +1,3 @@
 #!/bin/bash
 
-conda create --file conda.yml -p ./HATseq
+conda env create --file conda.yml -p ./HATseq
