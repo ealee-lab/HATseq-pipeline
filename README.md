@@ -26,7 +26,9 @@ bash make_config.sh <sample_name> <fastq1> <fastq2> <bulk|microbulk|single> <4_b
 # Running the Pipeline # 
 ```
 cd workflow
-vim run_HATseq.sh 
+vim run_HATseq.sh #Edit: your.email@you.com, your_partition, your_account, /path/to/HATseq-pipeline, /path/to/output/
+cd slurm
+vim cluster-config.yml #Edit: /path/to/HATseq-pipeline, your_partition
 bash run_HATseq.sh <sample_name> HATseq_hg38 #Or sbatch to submit as a job on a Slurm HPCC
 ```
 
