@@ -20,7 +20,7 @@ unzip things, concatenate if needed (or could source original)
 ```
 cd setup
 vim make_config.sh #Edit the paths to the correct files and directories on your server
-bash make_config.sh <sample_name> <fastq1> <fastq2> <bulk|microbulk|single> <4_base_in_line_index> [sequencing_platform] [sequencing_center] > ../config/config.<sample_name>.yaml 
+bash make_config.sh <sample_name> <fastq1> <fastq2> <bulk|microbulk|single> <4_base_in_line_index> [sequencing_platform] [sequencing_center] 
 ```
 
 # Running the Pipeline # 
