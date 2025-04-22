@@ -18,10 +18,11 @@ source activate HATseq-pipeline
 HATseq_pipeline_directory="/path/to/HATseq-pipeline"
 sample_name=$1
 HATseq_version=$2 
+library=$3
 current_dir=$(realpath ./) 
 snakefile=${HATseq_pipeline_directory}/workflow/Snakefile.${HATseq_version} 
 profile=${HATseq_pipeline_directory}/workflow/slurm
-configfile=${HATseq_pipeline_directory}/config/config.${sample_name}.yaml  
+configfile=${HATseq_pipeline_directory}/config/config.${library}.${sample_name}  
 directory=/path/to/output/${sample_name} 
 
 snakemake  --unlock  -s ${snakefile}  --profile ${profile}  --configfile ${configfile}  --directory ${directory}
