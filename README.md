@@ -29,7 +29,7 @@ cd workflow
 vim run_HATseq.sh #Edit: your.email@you.com, your_partition, your_account, /path/to/HATseq-pipeline, /path/to/output/
 cd slurm
 vim cluster-config.yml #Edit: /path/to/HATseq-pipeline, your_partition
-bash run_HATseq.sh <sample_name> HATseq_hg38 #Or sbatch to submit as a job on a Slurm HPCC
+bash run_HATseq-pipeline.sh <sample_name> HATseq_hg38 [bulk|micro|single]#Or sbatch to submit as a job on a Slurm HPCC
 ```
 
 # Demo Data # 
