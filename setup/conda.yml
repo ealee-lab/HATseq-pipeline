@@ -17,3 +17,5 @@ dependencies:
  - fastqc
  - sambamba
  - bwa
+ - seqtk
+ - seqkit 
