@@ -12,11 +12,12 @@ library=$4 #bulk, micro, single
 index=$5 
 
 
-seq_plat="NovaseqS4"
-seq_cent="Psomagen" 
 seq_plat=$6
 seq_cent=$7
-
+if [ -z "$seq_plat" ]; then
+	seq_plat="NovaseqS4"
+	seq_cent="Psomagen"
+fi
 
 
 output_dir=/path/to/desired/output/location/${sample_name}
@@ -36,9 +37,7 @@ echo "index: \"${index}\"" >> ../config/config.${library}.${sample_name}
 echo "cores: \"${cores}\"" >> ../config/config.${library}.${sample_name}
 echo "raw_fastq1: \"${fastq1}\"" >> ../config/config.${library}.${sample_name}
 echo "raw_fastq2: \"${fastq2}\"" >> ../config/config.${library}.${sample_name}
-echo "fastq_screen_config: \"${fastq_screen_config}\"" >> ../config/config.${library}.${sample_name}
 echo "bwa_ref_genome: \"${bwa_ref_genome}\"" >> ../config/config.${library}.${sample_name}
-echo "STAR_genome_dir: \"${STAR_genome_dir}\"" >> ../config/config.${library}.${sample_name}
 echo "reference_dir: \"${reference_dir}\"" >> ../config/config.${library}.${sample_name}
 echo "min_to_pass: \"${min_to_pass}\"" >> ../config/config.${library}.${sample_name}
 echo "num_cells: \"${num_cells}\"" >> ../config/config.${library}.${sample_name}
