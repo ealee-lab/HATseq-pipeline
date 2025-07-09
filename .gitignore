@@ -6,6 +6,7 @@
 !setup
 !workflow
 workflow/*/
+!workflow/envs
 !workflow/slurm
 !README.md
 !.gitignore
