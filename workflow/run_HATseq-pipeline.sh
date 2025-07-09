@@ -13,7 +13,7 @@
 
 
 #Activate environment 
-source activate HATseq-pipeline
+source activate HATseq
 
 HATseq_pipeline_directory="/path/to/HATseq-pipeline"
 sample_name=$1
@@ -25,5 +25,5 @@ profile=${HATseq_pipeline_directory}/workflow/slurm
 configfile=${HATseq_pipeline_directory}/config/config.${library}.${sample_name}  
 directory=/path/to/output/${sample_name} 
 
-snakemake  --unlock  -s ${snakefile}  --profile ${profile}  --configfile ${configfile}  --directory ${directory}
-snakemake   -s ${snakefile}  --profile ${profile}  --configfile ${configfile}  --directory ${directory} 
+snakemake --unlock -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory}
+snakemake -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory} --use-conda --conda-frontend conda

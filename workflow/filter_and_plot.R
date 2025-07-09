@@ -74,12 +74,12 @@ big_table$RPM_log <- log(big_table$RPM)
 
 
 ####
-library(statcomp)
-big_table$permutation_entropy <- NA 
-for ( i in 1:nrow(big_table)) {
-  #print(i)
-  big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
-}
+# library(statcomp)
+# big_table$permutation_entropy <- NA 
+# for ( i in 1:nrow(big_table)) {
+#   #print(i)
+#   big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
+# }
 # #perm_ent<-
 #   ggplot(big_table[!is.na(big_table$permutation_entropy),], aes(x=permutation_entropy))+
 #   geom_histogram() #+

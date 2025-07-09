@@ -113,7 +113,7 @@ segdup_intersect = analysis_path + "segdup_intersect.bed"
 max_depth = analysis_path + "max_depth_distance_to_boundary.txt"
 polyA_trimmed = analysis_path + "polyA_trimmed.txt"
 plots = analysis_path + "filtering_plots.pdf"
-filtered_peaks = analysis_path + "filtered_peaks.tsv" 
+filtered_peaks = analysis_path + "filtered_peaks.tsv"
 transduction_support = analysis_path + "transduction_support.tsv"
 igv_script = analysis_path + "igv.sh"
 summary_file = analysis_path + "summary.txt"
@@ -331,8 +331,7 @@ rule extract_clipping:
 		ofasta3p.close()
 		otable3p.close()
 		
-	
-		
+			
 
 rule peak_calling:
 	input:
@@ -781,14 +780,14 @@ rule filter_and_classify:
 	output:
 		filtered_peaks = filtered_peaks,
 		plots = plots,
-		igv_script = igv_script,
-		summary_file = summary_file
+		summary_file = summary_file,
+		igv_script = igv_script
+	conda:
+		"envs/plotR.yml"
 	resources: 
 		runtime = 10,
 		mem_mb = 2000
 	shell:
-		#"conda deactivate \n"
-		"source /programs/biogrids.shrc \n"
-		"Rscript ./filter_and_plot.R {input.big_table} {library} {output.plots} {output.filtered_peaks} {input.transduction_bed} {output.summary_file}\n"
-		"bedtools igv -slop 200 -path {analysis_path} -bed {output.filtered_peaks} -name > {output.igv_script} \n"
-
+		#"set +u; source /programs/biogrids.shrc; set -u && echo 'here' >> log.txt \n"
+		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {library} {output.plots} {output.filtered_peaks} {input.transduction_bed} {output.summary_file} \n"
+		"awk -v OFS='\t' 'NR>1 {{print $2,$3,$4,$1}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script} \n"

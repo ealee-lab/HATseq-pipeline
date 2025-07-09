@@ -1,14 +1,14 @@
 #!/bin/bash 
 
 
-#Suggested command line use of this script:
+# Suggested command line use of this script:
 
 
 
 sample_name=$1
 fastq1=$2
 fastq2=$3
-library=$4 #bulk, micro, single
+library=$4 # bulk, micro, single
 index=$5 
 
 
