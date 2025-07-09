@@ -1,0 +1,11 @@
+/*
+*.out
+*__pycache__
+!config
+!scripts
+!setup
+!workflow
+workflow/*/
+!workflow/slurm
+!README.md
+!.gitignore
