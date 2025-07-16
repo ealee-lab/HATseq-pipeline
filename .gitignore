@@ -1,12 +1,10 @@
 /*
+*.err
 *.out
 *__pycache__
 !config
 !scripts
 !setup
 !workflow
-workflow/*/
-!workflow/envs
-!workflow/slurm
 !README.md
 !.gitignore
