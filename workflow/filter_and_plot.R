@@ -6,6 +6,8 @@ library(tidyverse) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipel
 library(RColorBrewer) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(ggpubr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library("ggsci")#,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
+#library(statcomp)
+#library(circlize)
 args<-commandArgs(TRUE)
  #args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_big_table.tsv", "bulk", 
   #          "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtering_plots.pdf", 
@@ -24,8 +26,8 @@ big_table_filter_annotation_file <- paste0(big_table_file, "_filter_reasons.tsv"
 library <- args[2]
 plots_path <- args[3]
 filtered_peaks <- args[4]
-transduction_bed_file <- args[5]
-summary <- args[6]
+#transduction_bed_file <- args[5]
+summary <- args[5]
 #summary <- paste0(filtered_peaks, "_summary.txt")
 
 
@@ -45,12 +47,12 @@ summary <- args[6]
 
 cannonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
 big_table <- read.table(big_table_file,sep="\t")
-colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","custompeakname","nearest_peak","SegDups","max_distance")
+colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 #colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp","RPM","custompeakname","nearest_peak","SegDups","max_distance","chrgts","startgts","endgts","chrgts2","startgts2","sam1","sam2","sam3","sam4","sam5","sam6","something","something2","something3","level","number","overlap")
 
 big_table$gmotif_percent = big_table$gmotif / big_table$reads
-big_table$map_to_source = lapply(strsplit(paste(big_table$s3p, big_table$h3p, sep=","),","), unique)
-big_table$map_to_target = lapply(strsplit(paste(big_table$s5p, big_table$h5p, sep=","),","), unique)
+# big_table$map_to_source = lapply(strsplit(paste(big_table$s3p, big_table$h3p, sep=","),","), unique)
+# big_table$map_to_target = lapply(strsplit(paste(big_table$s5p, big_table$h5p, sep=","),","), unique)
 big_table <- merge(big_table,big_table[,c("RPM","peak")],by.x="nearest_peak",by.y="peak",suffixes = c("","_nearest"),all.x=TRUE)
 big_table$nearest_RPM_ratio <- big_table$RPM / big_table$RPM_nearest
 big_table$nearest_RPM_ratio[is.na(big_table$nearest_RPM_ratio)] <- 1
@@ -74,11 +76,11 @@ big_table$RPM_log <- log(big_table$RPM)
 
 
 ####
-# library(statcomp)
+
 # big_table$permutation_entropy <- NA 
 # for ( i in 1:nrow(big_table)) {
-#   #print(i)
-#   big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
+#   print(i)
+# big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
 # }
 # #perm_ent<-
 #   ggplot(big_table[!is.na(big_table$permutation_entropy),], aes(x=permutation_entropy))+
@@ -158,7 +160,7 @@ big_table$Off_target_amplification <- FALSE
 big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$repeatmasker) ) & !(big_table$KR) ] <- TRUE
 
 big_table$KNR <- FALSE
-big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa)) & !(big_table$KR | big_table$Off_target_amplification | big_table$FP)  ] <- TRUE
+big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
 
 big_table$UNK <- FALSE
 big_table$SOM_clonal <- FALSE
@@ -390,12 +392,19 @@ if(library == "bulk"){
 
 cat(paste0("Total peaks after filtering: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 big_table$classification[big_table$FP] <- "FP"
-if(library != "bulk"){
+if(library == "single"){
   big_table$classification[big_table$classification == "Candidate"] <- "UNK"
-}else {#if(library == "bulk"){
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5 ] <- "UNK"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+}else {  
+  if(library == "bulk"){  
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
+    big_table$classification[big_table$classification == "SOM_clonal" & big_table$RPM >= 5 ] <- "UNK" # UNK must have multiple templates and RPM >= 5
+  }else{
+    big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5 ] <- "UNK"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+    
+  }
 }
 # }else{ #microbulk case 
 #   big_table$classification[big_table$classification == "Candidate" & big_table$RPM ] 
@@ -470,95 +479,95 @@ filter_reasons_KR
 filter_reasons_KNR
 dev.off()
 
-
-#Transduction support
-transduction_table <- big_table[!(big_table$classification %in% c("FP","Off_target")) ,c("peak","custompeakname","map_to_source","map_to_target","classification")]
-transduction_table$transduction_support <- NA
-for (row in (1:nrow(transduction_table))){
-  #print("##################################################")
-  source_list <- unlist(transduction_table$map_to_source[row]) #[unlist(transduction_table$map_to_source[row]) != c("", transduction_table$custompeakname[row])]
-  source_list <- source_list[!(source_list %in%  c("", transduction_table$custompeakname[row])) ]
-  #transduction_table$map_to_target[row] <- unlist(transduction_table$map_to_target[row])[unlist(transduction_table$map_to_target[row]) != c("", transduction_table$custompeakname[row])]
-  if (length(source_list) > 0){
-    #print(source_list)
-    for (custompeak in source_list){
-      #print(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])
-      if (transduction_table$custompeakname[row] %in% unlist(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])){
-        if (!is.na(transduction_table$transduction_support[row])){
-          transduction_table$transduction_support[row] <- paste(transduction_table$transduction_support[row], custompeak, sep=", ")
-        }else{
-          transduction_table$transduction_support[row] <- custompeak
-        }
-      }
-    }
-  }
-}
-transduction_table <- transduction_table[!is.na(transduction_table$transduction_support) & !grepl(",",transduction_table$transduction_support),c("peak","transduction_support")]
-transduction_bed <- read.table(transduction_bed_file, sep="\t",header=FALSE,col.names = c("chr","start","end","custompeakname","elements"))
-transduction_table <- merge(transduction_table,transduction_bed,by.x="transduction_support",by.y="custompeakname")
-colnames(transduction_table) <- c("transduction_support","peak","source_chr","source_start","source_end","source_elements")
-
-
+# 
+# #Transduction support
+# transduction_table <- big_table[!(big_table$classification %in% c("FP","Off_target")) ,c("peak","custompeakname","map_to_source","map_to_target","classification")]
+# transduction_table$transduction_support <- NA
+# for (row in (1:nrow(transduction_table))){
+#   #print("##################################################")
+#   source_list <- unlist(transduction_table$map_to_source[row]) #[unlist(transduction_table$map_to_source[row]) != c("", transduction_table$custompeakname[row])]
+#   source_list <- source_list[!(source_list %in%  c("", transduction_table$custompeakname[row])) ]
+#   #transduction_table$map_to_target[row] <- unlist(transduction_table$map_to_target[row])[unlist(transduction_table$map_to_target[row]) != c("", transduction_table$custompeakname[row])]
+#   if (length(source_list) > 0){
+#     #print(source_list)
+#     for (custompeak in source_list){
+#       #print(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])
+#       if (transduction_table$custompeakname[row] %in% unlist(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])){
+#         if (!is.na(transduction_table$transduction_support[row])){
+#           transduction_table$transduction_support[row] <- paste(transduction_table$transduction_support[row], custompeak, sep=", ")
+#         }else{
+#           transduction_table$transduction_support[row] <- custompeak
+#         }
+#       }
+#     }
+#   }
+# }
+# transduction_table <- transduction_table[!is.na(transduction_table$transduction_support) & !grepl(",",transduction_table$transduction_support),c("peak","transduction_support")]
+# transduction_bed <- read.table(transduction_bed_file, sep="\t",header=FALSE,col.names = c("chr","start","end","custompeakname","elements"))
+# transduction_table <- merge(transduction_table,transduction_bed,by.x="transduction_support",by.y="custompeakname")
+# colnames(transduction_table) <- c("transduction_support","peak","source_chr","source_start","source_end","source_elements")
+# 
+# 
 
 #Filtered table
-filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","custompeakname")]
-filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
-
-filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_chr[grepl("KR",filtered_table$classification )] <- NA 
-filtered_table$source_start[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_end[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_elements[grepl("KR",filtered_table$classification)] <- NA 
+filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
+#filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
+# 
+# filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_chr[grepl("KR",filtered_table$classification )] <- NA
+# filtered_table$source_start[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_end[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_elements[grepl("KR",filtered_table$classification)] <- NA
 
 write.table(filtered_table,filtered_peaks,sep="\t",row.names=FALSE,col.names=TRUE,quote=FALSE,na = "-NA-")
 write.table(big_table[,lapply(big_table, class) != "list"] , big_table_filter_annotation_file ,sep="\t",row.names=FALSE,col.names=TRUE,quote=FALSE,na = "-NA-")
 
-
-library(circlize)
-
-circos_table <- filtered_table[!is.na(filtered_table$source_chr), c("chrm","start","end","source_chr","source_start","source_end","classification")]
-#circos.initializeWithIdeogram(species = "hg38")
-colnames(circos_table) <- c("chrom1","start1","end1","chrom2","start2","end2","classification")
-circos_table_polymorphic <- circos_table[grepl("KR|KNR",circos_table$classification),]
-circos_table_novel <- circos_table[circos_table$classification %in% c("UNK","SOM"),]
-
-png(paste0(plots_path,"_circos_plot_ref_polymorphic.png"), width = 1000, height = 1000)
-par(mar = c(1, 1, 4, 1))
-circos.initializeWithIdeogram(species = "hg38")
-
-for (i in 1:nrow(circos_table_polymorphic)) {
-  circos.link(
-    sector.index1 = circos_table_polymorphic$chrom1[i],
-    point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
-    sector.index2 = circos_table_polymorphic$chrom2[i],
-    point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
-    col = "blue",
-    directional = -1
-  )
-}
-title("Reference and Polymorphic Insertions with Transductions", cex.main = 1.5)
-
-circos.clear()
-#circos.clear()
-dev.off()
-png(paste0(plots_path,"_circos_plot_novel.png"), width = 1000, height = 1000)
-par(mar = c(1, 1, 4, 1))
-
-circos.initializeWithIdeogram(species = "hg38")
-
-for (i in 1:nrow(circos_table_novel)) {
-  circos.link(
-    sector.index1 = circos_table_novel$chrom1[i],
-    point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
-    sector.index2 = circos_table_novel$chrom2[i],
-    point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
-    col = "red",
-    directional = -1
-  )
-}
-title("Novel Insertions with Transductions", cex.main = 1.5)
-
-circos.clear()
-#circos.clear()
-#dev.off()
-dev.off()
+# 
+# 
+# 
+# circos_table <- filtered_table[!is.na(filtered_table$source_chr), c("chrm","start","end","source_chr","source_start","source_end","classification")]
+# #circos.initializeWithIdeogram(species = "hg38")
+# colnames(circos_table) <- c("chrom1","start1","end1","chrom2","start2","end2","classification")
+# circos_table_polymorphic <- circos_table[grepl("KR|KNR",circos_table$classification),]
+# circos_table_novel <- circos_table[circos_table$classification %in% c("UNK","SOM"),]
+# 
+# png(paste0(plots_path,"_circos_plot_ref_polymorphic.png"), width = 1000, height = 1000)
+# par(mar = c(1, 1, 4, 1))
+# circos.initializeWithIdeogram(species = "hg38")
+# 
+# for (i in 1:nrow(circos_table_polymorphic)) {
+#   circos.link(
+#     sector.index1 = circos_table_polymorphic$chrom1[i],
+#     point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
+#     sector.index2 = circos_table_polymorphic$chrom2[i],
+#     point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
+#     col = "blue",
+#     directional = -1
+#   )
+# }
+# title("Reference and Polymorphic Insertions with Transductions", cex.main = 1.5)
+# 
+# circos.clear()
+# #circos.clear()
+# dev.off()
+# png(paste0(plots_path,"_circos_plot_novel.png"), width = 1000, height = 1000)
+# par(mar = c(1, 1, 4, 1))
+# 
+# circos.initializeWithIdeogram(species = "hg38")
+# 
+# for (i in 1:nrow(circos_table_novel)) {
+#   circos.link(
+#     sector.index1 = circos_table_novel$chrom1[i],
+#     point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
+#     sector.index2 = circos_table_novel$chrom2[i],
+#     point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
+#     col = "red",
+#     directional = -1
+#   )
+# }
+# title("Novel Insertions with Transductions", cex.main = 1.5)
+# 
+# circos.clear()
+# #circos.clear()
+# #dev.off()
+# dev.off()
