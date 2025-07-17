@@ -22,7 +22,7 @@ args<-commandArgs(TRUE)
 #           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_summary.txt")
 
 big_table_file <- args[1]
-big_table_filter_annotation_file <- paste0(big_table_file, "_filter_reasons.tsv")
+big_table_filter_annotation_file <- paste0(sub(".tsv$", "", big_table_file), "_filter_reasons.tsv")
 library <- args[2]
 plots_path <- args[3]
 filtered_peaks <- args[4]

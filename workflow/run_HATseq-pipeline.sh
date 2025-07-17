@@ -26,4 +26,4 @@ configfile=${HATseq_pipeline_directory}/config/config.${library}.${sample_name}
 directory=/path/to/output/${sample_name} 
 
 snakemake --unlock -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory}
-snakemake -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory} --use-conda --conda-frontend conda
+snakemake -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory}
