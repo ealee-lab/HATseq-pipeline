@@ -13,9 +13,11 @@ for call_peaks in $(ls ${pdir}/*/analysis/*big_table_filter_reasons.tsv); do
 
     num_called=$(grep -E 'UNK|SOM' "${call_peaks}" | wc -l)
     num_truth=$(wc -l "${truth_peaks}" | awk '{print $1}')
-    both_peaks="${outdir}/${sample}_big_table_filter_${truth_name}.tsv"
+    both_peaks="${outdir}/${sample}_big_table_filter_${truth_name}_noerror.tsv"
 
-    tp=$(grep -E 'UNK|SOM' "${both_peaks}" | wc -l) # number of GTS peaks found
+    # Number of true peaks found - don't recount if 1 called peak overlaps multiple true peaks
+    tp=$(grep -E 'UNK|SOM' "${both_peaks}" | awk '{print $4}' | sort | uniq | wc -l) 
+
     fp=$((${num_called} - ${tp}))
     fn=$((${num_truth} - ${tp}))
 
@@ -23,7 +25,7 @@ for call_peaks in $(ls ${pdir}/*/analysis/*big_table_filter_reasons.tsv); do
     recall=$(echo "scale=4; ${tp} / (${tp} + ${fn})" | bc) 
     f1=$(echo "scale=4; 2 * (${precision} * ${recall}) / (${precision} + ${recall})" | bc)
 
-    outfile="${outdir}/${sample}_statistics.txt"
+    outfile="${outdir}/${sample}_f1_score_${truth_name}_noerror.txt"
     echo -e "${sample}\n" > "${outfile}"
     echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called}" >> "${outfile}"
     echo "Number of peaks in ground truth set: ${num_truth}" >> "${outfile}"

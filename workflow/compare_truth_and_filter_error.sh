@@ -19,7 +19,7 @@ for call_set in $(ls ${pdir}/*/analysis/*_big_table_filter_reasons.tsv); do
     # Extract relevant fields from peak set then intersect with truth set
     # Fields extracted are chrm, start, end, peak, RPM, strand, classification, filter_reason
     awk -v FS='\t' -v OFS='\t' '{if (NR > 1) print $2,$3,$4,$5,$27,$7,$51,$52}' "${call_set}" | \
-        bedtools intersect -wo -a stdin \
+        bedtools intersect -wo -S -a stdin \
 	    -b <(bedtools slop -b 50 -i "${truth_set}" -g "${genome}") \
 	    > "${truth_out}"
 
