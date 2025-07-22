@@ -45,7 +45,7 @@ summary <- args[5]
 #transduction_bed_file  <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_custom_transduction.bed"
 # summary <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_summary.txt"
 
-cannonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
+canonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
 big_table <- read.table(big_table_file,sep="\t")
 colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 #colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp","RPM","custompeakname","nearest_peak","SegDups","max_distance","chrgts","startgts","endgts","chrgts2","startgts2","sam1","sam2","sam3","sam4","sam5","sam6","something","something2","something3","level","number","overlap")
@@ -178,7 +178,7 @@ big_table$classification[big_table$Off_target_amplification] <- "Off_target"
 
 ####Plotting ####
 
-filter_chrm <- ggplot(big_table, aes(x=(chrm %in% cannonical_chrs),group=classification , color=classification, fill=classification)) +
+filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs),group=classification , color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
   scale_color_nejm()+
@@ -280,16 +280,23 @@ filter_segdup <-ggplot(big_table, aes(x = (SegDups != '.'), group=classification
 
 #### Printing number of each filter ####
 summary_file <- file(summary, open='a')
-cat(paste0("\n\n\n#############################Filtering results ",Sys.time(),"####################"),file=summary_file,sep="")
-big_table$filter_reason <- NA #big_table$filter_reason[] <- 
+cat(paste0("\n####################Filtering results ",Sys.time(),"####################\n"),file=summary_file,sep="")
+big_table$filter_reason <- "-NA-"  
 #Filtering cat("Hello",file="outfile.txt",sep="\n")cat("Hello",file="outfile.txt",sep="\n")
-print("#############Filtering#################")
-cat(paste0("Total peaks : " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
+# print("#############Filtering#################")
+cat(paste0("Total peaks: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 
-#Filter peaks in non-cannonical chromosomes
-big_table$filter_reason[!(big_table$chrm %in% cannonical_chrs) & !(big_table$FP)] <- "chrms"
-big_table$FP[!(big_table$chrm %in% cannonical_chrs) & !(big_table$FP)] <- TRUE
-cat(paste0("Canonical chroms: " , nrow(big_table[big_table$filter_reason == "chrms",] )),file=summary_file,sep="\n")
+# Annotate candidate peaks with G-motif and SegDup
+# cat("\nANNOTATIONS",file=summary_file,sep="\n")
+# cat(paste0("Peaks with Gmotif percent less than 50% and not KR or KNR overlapping: ", 
+#   nrow(big_table[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR),])),file=summary_file,sep="\n")
+# cat(paste0("Peaks overlapping SegDups: ", nrow(big_table[big_table$SegDups != '.',])),file=summary_file,sep="\n")
+
+#Filter peaks in non-canonical chromosomes
+# cat("\nFILTERS",file=summary_file,sep="\n")
+big_table$filter_reason[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- "chrms"
+big_table$FP[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- TRUE
+cat(paste0("Non-canonical chroms: " , nrow(big_table[big_table$filter_reason == "chrms",] )),file=summary_file,sep="\n")
 
 #In PTA libraries, remove smaller peaks nearby larger ones that are due to incorrect amplification during PTA 
 if (library != "bulk"){
@@ -305,11 +312,10 @@ if (library != "bulk") {
   cat(paste0("Number of templates less than 3: " , nrow(big_table[big_table$filter_reason == "num_templates",] )),file=summary_file,sep="\n")
 }
 
-#Remove candidate novel peaks that do not carry the G-motif
+# Remove candidate novel peaks that do not carry the G-motif
 big_table$filter_reason[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- "gmotif"
 big_table$FP[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- TRUE
 cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(big_table[big_table$filter_reason == "gmotif",] )),file=summary_file,sep="\n")
-
 
 # if(library != "single"){
 #   big_table$filter_reason[(big_table$RPM <= 5 & (big_table$KR | big_table$KNR) & !(big_table$FP)) ] <-"RPM" 
@@ -320,6 +326,7 @@ cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(
 #   big_table$FP[(big_table$RPM <= 5 & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP)) ]<- TRUE
 #   cat(paste0("RPM less than or equal 5 for KR overlap and less than 2 for KNR overlap and less than or equal 10 all other: " , nrow(big_table[big_table$filter_reason == "RPM" ,] )),file=summary_file,sep="\n")
 # }
+
 
 if(library != "bulk"){
   big_table$filter_reason[big_table$template_ratio <= 0.25 & !(big_table$FP)] <- "template_ratio"
@@ -335,19 +342,17 @@ big_table$filter_reason[((big_table$misaligned == "misalignment") & !(big_table$
 big_table$FP[((big_table$misaligned == "misalignment") & !(big_table$FP) )]<- TRUE
 cat(paste0("Misaligned: " , nrow(big_table[big_table$filter_reason == "misaligned_reads",] )),file=summary_file,sep="\n")
 
- big_table$filter_reason[(big_table$polyA_percent == 0) & !(big_table$FP)] <- "polyApercent"
- big_table$FP[(big_table$polyA_percent == 0) & !(big_table$FP)]<- TRUE
- cat(paste0("No polyA containing reads (junction spanning): " , nrow(big_table[big_table$filter_reason == "polyApercent",] )),file=summary_file,sep="\n")
+big_table$filter_reason[(big_table$polyA_percent == 0) & !(big_table$FP)] <- "polyApercent"
+big_table$FP[(big_table$polyA_percent == 0) & !(big_table$FP)]<- TRUE
+cat(paste0("No polyA containing reads (junction spanning): " , nrow(big_table[big_table$filter_reason == "polyApercent",] )),file=summary_file,sep="\n")
 
 big_table$filter_reason[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- "ALR/Alpha"
 big_table$FP[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- TRUE
 cat(paste0("ALR/Alpha Satellite overlapping: " , nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),file=summary_file,sep="\n")
 
-
 big_table$filter_reason[(big_table$SegDups != ".") & !(big_table$FP)] <- "SegDup"
 big_table$FP[(big_table$SegDups != ".") & !(big_table$FP)] <- TRUE
 cat(paste0("SegDups: " , nrow(big_table[big_table$filter_reason == "SegDup",] )),file=summary_file,sep="\n")
-
 
 if(library == "bulk"){
   big_table$filter_reason[(big_table$RPM <= 1 ) ] <-"RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
@@ -358,7 +363,6 @@ if(library == "bulk"){
   big_table$FP[(big_table$RPM <= 5 )]<- TRUE
   cat(paste0("RPM less than or equal 5: " , nrow(big_table[big_table$filter_reason == "RPM" ,] )),file=summary_file,sep="\n")
 }
-
 
 
 # #testing clustering of each group after all other filters have been applied 
@@ -403,21 +407,20 @@ if(library == "single"){
     big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5 ] <- "UNK"
     big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
     big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
-    
   }
 }
 # }else{ #microbulk case 
 #   big_table$classification[big_table$classification == "Candidate" & big_table$RPM ] 
 # }
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif > 0.5)  ] <- "KR_gmotif_containg"
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif < 0.5)  ] <- "KR_gmotif_missing"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif > 0.5)  ] <- "KNR_gmotif_containg"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif < 0.5)  ] <- "KNR_gmotif_missing"
+big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent >= 0.5)  ] <- "KR_gmotif_containing"
+big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent < 0.5)  ] <- "KR_gmotif_missing"
+big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent >= 0.5)  ] <- "KNR_gmotif_containing"
+big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent < 0.5)  ] <- "KNR_gmotif_missing"
 
 
 big_table$classification <- as.factor(big_table$classification)
 
-cat(paste0("Total KR: " , nrow(big_table[grepl("KR",big_table$classification),])),file=summary_file,sep="\n")
+cat(paste0("\nTotal KR: " , nrow(big_table[grepl("KR",big_table$classification),])),file=summary_file,sep="\n")
 cat(paste0("Total KNR: " , nrow(big_table[grepl("KNR",big_table$classification),])),file=summary_file,sep="\n")
 cat(paste0("Total UNK: " , nrow(big_table[big_table$classification == "UNK",])),file=summary_file,sep="\n")
 if(library == "bulk"){
