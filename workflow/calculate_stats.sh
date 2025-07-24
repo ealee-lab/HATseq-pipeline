@@ -2,62 +2,82 @@
 
 # Calculate precision, recall, and F1 score for each sample.
 
-pdir=$1 # Parent directory containing all pipeline output
-truth_name=$2 # Name of ground truth set
-truth_peaks=$3 # Ground truth set (GTS) of peaks
+peak_file=$1 # Path to input peaks intersected with ground truth set (GTS)
+noerr_file=$2 # Path to input peaks intersected with GTS and error-prone filtered
+out_file=$3 # Path to output file with statistics
+true_peaks=$4 # Path to GTS
+names=$5 # List of peaks to remove from total count
 
-num_truth=$(wc -l "${truth_peaks}" | awk '{print $1}')
+num_true=$(wc -l "${true_peaks}" | awk '{print $1}')
 
-for path in $(ls ${pdir}/); do
-    sample=$(basename "${path}")
-    outdir=$(realpath "${pdir}")/${sample}/analysis/post
-    echo $sample
+#### BEFORE ERROR-PRONE FILTER ####
 
-    # BEFORE ERROR-PRONE FILTER
-    call_peaks="${pdir}/${sample}/analysis/${sample}_filtered_peaks.tsv"
-    both_peaks="${outdir}/${sample}_big_table_filter_${truth_name}.tsv"
+# If names of insertions are given, remove them from the count
+# e.g. If using somatic GTS, remove germline GTS insertions from count to subset
+if [[ $# == 5 ]]; then
 
-    # Number of called peaks
-    num_called=$(grep -E 'UNK|SOM' "${call_peaks}" | wc -l)
+    # Number of called peaks (don't recount if 1 called peak overlaps >1 true peaks)
+    num_called=$(grep -v -f "${names}" "${peak_file}" | grep -E 'UNK|SOM' | \
+        awk -v FS='\t' '{print $4}' | sort | uniq | wc -l)
 
-    # Number of true peaks found - don't recount if 1 called peak overlaps multiple true peaks
-    tp=$(grep -E 'UNK|SOM' "${both_peaks}" | awk '{print $4}' | sort | uniq | wc -l) 
+    # Number of true peaks found (i.e. number of peaks that overlap with GTS)
+    tp=$(grep -v -f "${names}" "${peak_file}" | grep -E 'UNK|SOM' | \
+        awk -v FS='\t' -v OFS='\t' '{if ($15 > 0) print $4,$7}' | \
+        awk -v FS='\t' '{print $1}' | sort | uniq | wc -l) 
 
-    fp=$((${num_called} - ${tp}))
-    fn=$((${num_truth} - ${tp}))
+else
+    num_called=$(grep -E 'UNK|SOM' "${peak_file}" | \
+        awk -v FS='\t' '{print $4}' | sort | uniq | wc -l)
 
-    precision=$(echo "scale=4; ${tp} / (${tp} + ${fp})" | bc) 
-    recall=$(echo "scale=4; ${tp} / (${tp} + ${fn})" | bc) 
-    f1=$(echo "scale=4; 2 * (${precision} * ${recall}) / (${precision} + ${recall})" | bc)
+    tp=$(grep -E 'UNK|SOM' "${peak_file}" | \
+        awk -v FS='\t' -v OFS='\t' '{if ($15 > 0) print $4,$7}' | \
+        awk -v FS='\t' '{print $1}' | sort | uniq | wc -l) 
+fi
 
-    outfile="${outdir}/${sample}_f1_score_${truth_name}.txt"
-    echo -e "Number of true insertions: ${num_truth}\n" > "${outfile}"
-    echo -e "BEFORE ERROR-PRONE FILTER: ${sample}" >> "${outfile}"
-    echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called}" >> "${outfile}"
-    echo "Number of true peaks found by HAT-seq: ${tp}" >> "${outfile}"
-    echo "Precision: ${precision}" >> "${outfile}"
-    echo "Recall: ${recall}" >> "${outfile}"
-    echo "F1-score: ${f1}" >> "${outfile}"
+fp=$((${num_called} - ${tp}))
+fn=$((${num_true} - ${tp}))
+
+precision=$(echo "scale=4; ${tp} / (${tp} + ${fp})" | bc) 
+recall=$(echo "scale=4; ${tp} / (${tp} + ${fn})" | bc) 
+f1=$(echo "scale=4; 2 * (${precision} * ${recall}) / (${precision} + ${recall})" | bc)
+
+echo -e "Number of true insertions: ${num_true}\n" > "${out_file}"
+echo -e "BEFORE ERROR-PRONE FILTER: ${sample}" >> "${out_file}"
+echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called}" >> "${out_file}"
+echo "Number of true peaks found by HAT-seq: ${tp}" >> "${out_file}"
+echo "Precision: ${precision}" >> "${out_file}"
+echo "Recall: ${recall}" >> "${out_file}"
+echo "F1-score: ${f1}" >> "${out_file}"
 
 
-    # AFTER ERROR-PRONE FILTER
-    call_peaks_noerr="${outdir}/${sample}_big_table_filter_noerror.tsv"
-    both_peaks_noerr="${outdir}/${sample}_big_table_filter_${truth_name}_noerror.tsv"
+#### AFTER ERROR-PRONE FILTER ####
 
-    num_called_noerr=$(grep -E 'UNK|SOM' "${call_peaks_noerr}" | wc -l)
-    tp_noerr=$(grep -E 'UNK|SOM' "${both_peaks_noerr}" | awk '{print $4}' | sort | uniq | wc -l) 
+if [[ $# == 5 ]]; then
+    num_called_noerr=$(grep -v -f "${names}" "${noerr_file}" | grep -E 'UNK|SOM' | \
+        awk -v FS='\t' '{print $4}' | sort | uniq | wc -l)
 
-    fp_noerr=$((${num_called_noerr} - ${tp_noerr}))
-    fn_noerr=$((${num_truth} - ${tp_noerr}))
+    tp_noerr=$(grep -v -f "${names}" "${noerr_file}" | grep -E 'UNK|SOM' | \
+        awk -v FS='\t' -v OFS='\t' '{if ($15 > 0) print $4,$7}' | \
+        awk -v FS='\t' '{print $1}' | sort | uniq | wc -l) 
+else
+    num_called_noerr=$(grep -E 'UNK|SOM' "${noerr_file}" | \
+        awk -v FS='\t' '{print $4}' | sort | uniq | wc -l)
 
-    precision_noerr=$(echo "scale=4; ${tp_noerr} / (${tp_noerr} + ${fp_noerr})" | bc) 
-    recall_noerr=$(echo "scale=4; ${tp_noerr} / (${tp_noerr} + ${fn_noerr})" | bc) 
-    f1_noerr=$(echo "scale=4; 2 * (${precision_noerr} * ${recall_noerr}) / (${precision_noerr} + ${recall_noerr})" | bc)
+    tp_noerr=$(grep -E 'UNK|SOM' "${noerr_file}" | \
+        awk -v FS='\t' -v OFS='\t' '{if ($15 > 0) print $4,$7}' | \
+        awk -v FS='\t' '{print $1}' | sort | uniq | wc -l) 
+fi
 
-    echo -e "\nAFTER ERROR-PRONE FILTER: ${sample}" >> "${outfile}"
-    echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called_noerr}" >> "${outfile}"
-    echo "Number of true peaks found by HAT-seq: ${tp_noerr}" >> "${outfile}"
-    echo "Precision: ${precision_noerr}" >> "${outfile}"
-    echo "Recall: ${recall_noerr}" >> "${outfile}"
-    echo "F1-score: ${f1_noerr}" >> "${outfile}"
-done
+fp_noerr=$((${num_called_noerr} - ${tp_noerr}))
+fn_noerr=$((${num_true} - ${tp_noerr}))
+
+precision_noerr=$(echo "scale=4; ${tp_noerr} / (${tp_noerr} + ${fp_noerr})" | bc) 
+recall_noerr=$(echo "scale=4; ${tp_noerr} / (${tp_noerr} + ${fn_noerr})" | bc) 
+f1_noerr=$(echo "scale=4; 2 * (${precision_noerr} * ${recall_noerr}) / (${precision_noerr} + ${recall_noerr})" | bc)
+
+echo -e "\nAFTER ERROR-PRONE FILTER: ${sample}" >> "${out_file}"
+echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called_noerr}" >> "${out_file}"
+echo "Number of true peaks found by HAT-seq: ${tp_noerr}" >> "${out_file}"
+echo "Precision: ${precision_noerr}" >> "${out_file}"
+echo "Recall: ${recall_noerr}" >> "${out_file}"
+echo "F1-score: ${f1_noerr}" >> "${out_file}"
