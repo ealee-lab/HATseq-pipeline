@@ -22,7 +22,7 @@ args<-commandArgs(TRUE)
 #           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_summary.txt")
 
 big_table_file <- args[1]
-big_table_filter_annotation_file <- paste0(sub(".tsv$", "", big_table_file), "_filter_reasons.tsv")
+big_table_filter_annotation_file <- paste0(sub(".tsv$", "", big_table_file), "_filter_reasons_noG_noSD.tsv")
 library <- args[2]
 plots_path <- args[3]
 filtered_peaks <- args[4]
@@ -282,18 +282,16 @@ filter_segdup <-ggplot(big_table, aes(x = (SegDups != '.'), group=classification
 summary_file <- file(summary, open='a')
 cat(paste0("\n####################Filtering results ",Sys.time(),"####################\n"),file=summary_file,sep="")
 big_table$filter_reason <- "-NA-"  
-#Filtering cat("Hello",file="outfile.txt",sep="\n")cat("Hello",file="outfile.txt",sep="\n")
-# print("#############Filtering#################")
 cat(paste0("Total peaks: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 
 # Annotate candidate peaks with G-motif and SegDup
-# cat("\nANNOTATIONS",file=summary_file,sep="\n")
-# cat(paste0("Peaks with Gmotif percent less than 50% and not KR or KNR overlapping: ", 
-#   nrow(big_table[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR),])),file=summary_file,sep="\n")
-# cat(paste0("Peaks overlapping SegDups: ", nrow(big_table[big_table$SegDups != '.',])),file=summary_file,sep="\n")
+cat("\nANNOTATIONS",file=summary_file,sep="\n")
+cat(paste0("Peaks with Gmotif percent less than 50% and not KR or KNR overlapping: ", 
+ nrow(big_table[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR),])),file=summary_file,sep="\n")
+cat(paste0("Peaks overlapping SegDups: ", nrow(big_table[big_table$SegDups != '.',])),file=summary_file,sep="\n")
 
 #Filter peaks in non-canonical chromosomes
-# cat("\nFILTERS",file=summary_file,sep="\n")
+cat("\nFILTERS",file=summary_file,sep="\n")
 big_table$filter_reason[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- "chrms"
 big_table$FP[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- TRUE
 cat(paste0("Non-canonical chroms: " , nrow(big_table[big_table$filter_reason == "chrms",] )),file=summary_file,sep="\n")
@@ -313,9 +311,9 @@ if (library != "bulk") {
 }
 
 # Remove candidate novel peaks that do not carry the G-motif
-big_table$filter_reason[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- "gmotif"
-big_table$FP[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- TRUE
-cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(big_table[big_table$filter_reason == "gmotif",] )),file=summary_file,sep="\n")
+# big_table$filter_reason[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- "gmotif"
+# big_table$FP[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- TRUE
+# cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(big_table[big_table$filter_reason == "gmotif",] )),file=summary_file,sep="\n")
 
 # if(library != "single"){
 #   big_table$filter_reason[(big_table$RPM <= 5 & (big_table$KR | big_table$KNR) & !(big_table$FP)) ] <-"RPM" 
@@ -350,9 +348,9 @@ big_table$filter_reason[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$
 big_table$FP[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- TRUE
 cat(paste0("ALR/Alpha Satellite overlapping: " , nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),file=summary_file,sep="\n")
 
-big_table$filter_reason[(big_table$SegDups != ".") & !(big_table$FP)] <- "SegDup"
-big_table$FP[(big_table$SegDups != ".") & !(big_table$FP)] <- TRUE
-cat(paste0("SegDups: " , nrow(big_table[big_table$filter_reason == "SegDup",] )),file=summary_file,sep="\n")
+# big_table$filter_reason[(big_table$SegDups != ".") & !(big_table$FP)] <- "SegDup"
+# big_table$FP[(big_table$SegDups != ".") & !(big_table$FP)] <- TRUE
+# cat(paste0("SegDups: " , nrow(big_table[big_table$filter_reason == "SegDup",] )),file=summary_file,sep="\n")
 
 if(library == "bulk"){
   big_table$filter_reason[(big_table$RPM <= 1 ) ] <-"RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
