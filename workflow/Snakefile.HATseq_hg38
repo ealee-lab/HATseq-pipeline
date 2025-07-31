@@ -27,6 +27,8 @@ ref_genome = config["bwa_ref_genome"]
 library = config["library"]
 sequencing_platform = config['sequencing_platform']
 sequencing_center = config['sequencing_center']
+error_prone = config.get("error_prone", "None")
+truth_set = config.get("truth_set", "None")
 
 # Create reference file variables 
 Evrony_KR = reference_dir + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
@@ -165,8 +167,9 @@ rule qc:
 		fastqc_report_path = fastqc_report_path
 	threads: 4
 	resources:
-		runtime = 200, #200 minutes 
-		mem_mb = 20000 #5G memory 
+		runtime = 200, # 200 minutes 
+		mem_mb = 20000, # 5G memory 
+		tmpdir = tmp_dir
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} -i {input.raw_fastq1} -I {input.raw_fastq2} -o {output.illumina_adapter_trimmed_fastq1} -O {output.illumina_adapter_trimmed_fastq2} -h {output.fastp_html_report} \n" #Run fastp 
 		"mkdir -p {fastqc_report_path} && fastqc -t {threads} -o {params.fastqc_report_path}  --noextract --nogroup {input.raw_fastq1} {input.raw_fastq2} \n" #Run fastqc 
@@ -205,7 +208,8 @@ rule preprocessing:
 	threads: 4
 	resources:
 		runtime = 600,
-		mem_mb = 20000 
+		mem_mb = 20000,
+		tmpdir = tmp_dir 
 	shell:
 		"set -x \n"
 		"cutadapt -j {threads} -m {params.min_len} -g {params.adapter_L1HS} --discard-untrimmed -O 10 -e 0.08 -p {output.L1HS_adapter_trimmed_fromR2_fastq1} -o {output.L1HS_adapter_trimmed_fromR2_fastq2} {input.illumina_adapter_trimmed_fastq2} {input.illumina_adapter_trimmed_fastq1} >> {output.cutadapt_report} \n" #Remove the L1HS adapter from R2 filtering pairs where R2 does not contain the sequence. R1 and R2 fastqs are swapped and the sequence is with respect to the 5' of R2
@@ -240,7 +244,8 @@ rule alignment:
 	threads: 8 
 	resources:
 		runtime = 700,
-		mem_mb = 30000
+		mem_mb = 30000,
+		tmpdir = tmp_dir
 	shell:
 		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} |  samtools view -Sb - > {output.bwa_bam} \n"
 		"samtools sort -o {output.bwa_sorted} {output.bwa_bam} \n" 
@@ -261,7 +266,8 @@ rule gmotif:
 	threads: 1
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	shell:
 		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | seqtk seq -a - | grep 'CTTAGAGT' -B 1 | seqkit seq -i -n - | sort | uniq > {output.pass_gmotif_list} \n"
 
@@ -278,7 +284,8 @@ rule Ntag:
 	threads: 1 
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - > {output.Ntag_pre_fastq2} \n"
 		"cutadapt --quiet --discard-untrimmed -a {params.adapter} -o {output.Ntag_trimmed_fastq2} {output.Ntag_pre_fastq2} \n"
@@ -295,7 +302,8 @@ rule extract_clipping:
 	threads: 1
 	resources:
 		runtime = 100,
-		mem_mb = 20000
+		mem_mb = 20000,
+		tmpdir = tmp_dir
 	run:
 		ofasta5p=gzip.open(output.softclip5p_fasta , 'wt')
 		otable5p=open(output.hardclip5p_table, 'w')
@@ -371,7 +379,8 @@ rule peak_calling:
 		peak_seq = peak_seq
 	resources:
 		runtime = 20,
-		mem_mb = 50000		
+		mem_mb = 50000,
+		tmpdir = tmp_dir		
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' > {output.peaks} \n"
 		"cat <(genomeCoverageBed -ibam {input.uniq_sorted_bam} -bg -strand \"+\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"+\",$3-$2}}') <(genomeCoverageBed -ibam {input.uniq_sorted_bam} -bg -strand \"-\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"-\",$3-$2}}' ) |  sort -k1,1 -k2,2n | mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$2,$3,\"{sample_name}-plus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} else {{print $1,$2,$3,\"{sample_name}-minus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} }}' >> {output.peaks} \n"
@@ -389,7 +398,8 @@ rule chimera_hash:
 		chimera_hash = chimera_hash
 	resources:
 		runtime = 20,
-		mem_mb = 20000
+		mem_mb = 20000,
+		tmpdir = tmp_dir
 	run:
 		sequences = open(input.breakpoint_fa , 'r')
 		peak = sequences.readline().strip("\n").strip(">") 
@@ -419,7 +429,8 @@ rule segdup:
 		segdup_intersect = segdup_intersect
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	shell:
 		"bedtools intersect -wao -a {input.peaks} -b {input.segdups}  | bedtools merge -s -i stdin -c 4,10 -o distinct,collapse > {output.segdup_intersect} \n"
 	
@@ -460,7 +471,8 @@ rule map_transduction_fasta:
 	threads: 8
 	resources:
 		runtime = 200,
-		mem_mb = 20000
+		mem_mb = 20000,
+		tmpdir = tmp_dir
 	shell:
 		"set -x \n"
 		#"cat {input.peaks} <(cat {input.repeat_masker_L1HS} {input.Evrony_KR}   | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$3,$3+1,$4,$5,$6}} else {{print $1,$2,$2+1,$4,$5,$6}} }}' | slopBed -i stdin -g {input.hg38} -r 500 -l 0 ) <(cat {input.i1kgp_LINE1} {gnomad_LINE1} {nyuwa_LINE1} | slopBed -i stdin -g {input.hg38} -b 500 ) | sort -k1,1 -k2,2n | bedtools merge -i stdin -c 4,5,6 -o collapse,collapse,collapse | awk '{{OFS=\"\\t\"; print $1,$2,$3,\"{sample_name}_custom_reference_\"NR, $4 }}' > {output.transduction_bed} \n"
@@ -489,6 +501,8 @@ rule junction_spanning:
 	params:
 		max_err = 0,
 		adapter_T = "TTTTTTTT" #"TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+	resources:
+		tmpdir = tmp_dir
 	shell:
 		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed {input.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} | seqkit seq -i -n - > {output.polyA_trimmed} \n"
 
@@ -501,7 +515,8 @@ rule count_templates:
 		peak_readID_list = peak_readID_list
 	resources:
 		runtime = 20,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	run:
 		ibam=pysam.AlignmentFile(input.uniq_sorted_bam,'rb')
 		ibed=open(input.peaks, 'r')
@@ -570,7 +585,8 @@ rule chimera:
 		misalignment = misalignment 
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	run:
 		chimera_list = []
 		nonchimera_list = []
@@ -635,7 +651,8 @@ rule chimera_old:
 		nonchimera = nonchimera_old
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	run:
 		chimera_list = []
 		nonchimera_list = []
@@ -683,7 +700,8 @@ rule intersect_databases:
 		intersect_annotated = intersect_annotated
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\tRepeat_masker\tEvrony_KR\tHomopolymers\tGnomad\t1000_Genomes_Project\tNyuwa\txTea' > {output.intersect_annotated} \n"
 		"bedtools intersect -S -wao -a {input.peaks} -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.repeat_masker}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$10\";\"$11\";\"$12}}' | bedtools groupby -grp 1,2,3,4,5,6 -c 7 -o collapse | bedtools intersect -S -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.Evrony_KR}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$11\";\"$12\";\"$13}}' | bedtools groupby -grp 1,2,3,4,5,6,7 -c 8 -o collapse | bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.homopolymers}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$12}}' | bedtools groupby -grp 1,2,3,4,5,6,7,8 -c 9 -o collapse | bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$13\";\"$14\";\"$15}}'|  bedtools groupby -grp 1,2,3,4,5,6,7,8,9 -c 10 -o collapse | bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.i1kgp}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14\";\"$15\";\"$16}}' | bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10 -c 11 -o collapse | bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.nyuwa}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$15\";\"$16\";\"$17}}' | bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11 -c 12 -o collapse | bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.xTea}) | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$16\";\"$17\";\"$18}}' | bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12 -c 13 -o collapse >> {output.intersect_annotated} \n"
@@ -695,7 +713,8 @@ rule nearby_peak:
 		nearby_peaks = nearby_peaks 
 	resources:
 		runtime = 100,
-		mem_mb = 10000
+		mem_mb = 10000,
+		tmpdir = tmp_dir
 	shell:
 		"mergeBed -d 1000 -i  {input.peaks} -c 4,5 -o collapse,collapse -delim \"=\" | awk '$4 ~ \"=\"' | awk '{{OFS=\"\\t\"; split($5,a,\"=\") ; split($4,b,\"=\"); max=0; stop=0; for(i=0; i<length(a); i++){{split(a[i],d,\";\"); if(d[2] > max) {{max = d[2]; stop=i}} }} print b[stop],$4 }}' > {output.nearby_peaks} \n"	
 		#"bedtools closest -S -d -a {input.peaks} -b {input.peaks}  | cut -f 4,10,13 > {output.nearby_peaks} \n"
@@ -725,7 +744,8 @@ rule create_big_table:
 		big_table = big_table
 	resources:
 		runtime = 100,
-		mem_mb = 50000
+		mem_mb = 50000,
+		tmpdir = tmp_dir
 	run:
 		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
 		readIDs = pd.read_table(input.peak_readID_list , sep="\t", header=None, names=["peak_name","read"])
@@ -798,21 +818,35 @@ rule create_big_table:
 
 rule filter_and_classify:
 	input:
-		big_table = big_table
+		big_table = big_table,
 		#transduction_bed = transduction_bed
 	output:
 		filtered_peaks = filtered_peaks,
 		plots = plots,
 		igv_script = igv_script,
 		summary_file = summary_file
+	params: 
+		#use params to track optional files
+		error_prone = error_prone,
+		truth_set = truth_set,
+		hg38 = hg38
+	conda:
+		"envs/plotR.yml"
 	resources: 
 		runtime = 10,
-		mem_mb = 2000
+		mem_mb = 2000,
+		tmpdir = tmp_dir
 	shell:
-		#"conda deactivate \n"
-		#"source /programs/biogrids.shrc \n"
-		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {library} {output.plots} {output.filtered_peaks} {output.summary_file} \n"
-		"awk -v OFS='\t' 'NR>1 {{print $2,$3,$4,$1}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script} \n"
+		"""
+		#conda deactivate
+		#source /programs/biogrids.shrc
+		Rscript {workflow.basedir}/filter_and_plot.R \
+			{input.big_table} {library} {output.plots} {output.filtered_peaks} {output.summary_file} \
+			{params.error_prone} {params.truth_set} {params.hg38}
+
+		awk -v OFS='\t' 'NR>1 {{print $2,$3,$4,$1}}' {output.filtered_peaks} | \
+			bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script}
+		"""
 
 rule transduction_big_table: 
 	input:
@@ -838,7 +872,8 @@ rule transduction_big_table:
 		transduction_big_table = transduction_big_table
 	resources:
 		runtime = 100,
-		mem_mb = 50000
+		mem_mb = 50000,
+		tmpdir = tmp_dir
 	run:
 		readIDs = pd.read_table(input.peak_readID_list , sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed , sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
@@ -872,8 +907,9 @@ rule call_transductions:
 		filtered_transduction = filtered_transduction
 	resources:
 		runtime = 10, 
-		mem_mb = 2000
+		mem_mb = 2000,
+		tmpdir = tmp_dir
 	shell:
 		"source /programs/biogrids.shrc \n" 
-		"Rscript ./transduction_calling.R {input.transduction_big_table} {library} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
+		"Rscript {workflow.basedir}/transduction_calling.R {input.transduction_big_table} {library} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
 	

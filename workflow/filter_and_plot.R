@@ -5,9 +5,10 @@ library(ggplot2) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipelin
 library(tidyverse) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(RColorBrewer) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(ggpubr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library("ggsci")#,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-#library(statcomp)
+library(ggsci) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
+library(bedtoolsr)
 #library(circlize)
+
 args<-commandArgs(TRUE)
  #args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_big_table.tsv", "bulk", 
   #          "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtering_plots.pdf", 
@@ -22,14 +23,18 @@ args<-commandArgs(TRUE)
 #           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_summary.txt")
 
 big_table_file <- args[1]
-big_table_filter_annotation_file <- paste0(sub(".tsv$", "", big_table_file), "_filter_reasons_noG_noSD.tsv")
 library <- args[2]
 plots_path <- args[3]
 filtered_peaks <- args[4]
-#transduction_bed_file <- args[5]
 summary <- args[5]
-#summary <- paste0(filtered_peaks, "_summary.txt")
+error_prone <- args[6]
+truth_set <- args[7]
+genome <- args[8]
 
+# Files not tracked by Snakemake
+big_table_filter_annotation_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_big_table_filter_reasons.tsv")
+true_peak_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_true_peak_list.txt")
+error_peak_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_error_peak_list.txt")
 
 #debug/run manually
 #big_table_file <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_big_table.tsv" #.hapmap_intersect_all.txt"
@@ -50,7 +55,7 @@ big_table <- read.table(big_table_file,sep="\t")
 colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 #colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp","RPM","custompeakname","nearest_peak","SegDups","max_distance","chrgts","startgts","endgts","chrgts2","startgts2","sam1","sam2","sam3","sam4","sam5","sam6","something","something2","something3","level","number","overlap")
 
-big_table$gmotif_percent = big_table$gmotif / big_table$reads
+big_table$gmotif_percent <- big_table$gmotif / big_table$reads
 # big_table$map_to_source = lapply(strsplit(paste(big_table$s3p, big_table$h3p, sep=","),","), unique)
 # big_table$map_to_target = lapply(strsplit(paste(big_table$s5p, big_table$h5p, sep=","),","), unique)
 big_table <- merge(big_table,big_table[,c("RPM","peak")],by.x="nearest_peak",by.y="peak",suffixes = c("","_nearest"),all.x=TRUE)
@@ -76,22 +81,6 @@ big_table$RPM_log <- log(big_table$RPM)
 
 
 ####
-
-# big_table$permutation_entropy <- NA 
-# for ( i in 1:nrow(big_table)) {
-#   print(i)
-# big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
-# }
-# #perm_ent<-
-#   ggplot(big_table[!is.na(big_table$permutation_entropy),], aes(x=permutation_entropy))+
-#   geom_histogram() #+
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Perm entropy") + 
-#   ylab("Peak Count") + 
-#   xlab("Non-NA Permutation Entropy ")
-
 
 # 
 # library(pdc)
@@ -150,7 +139,6 @@ big_table$RPM_log <- log(big_table$RPM)
 # # 
 
 
-
 big_table$FP <- FALSE
 
 big_table$KR <- FALSE
@@ -161,6 +149,19 @@ big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$r
 
 big_table$KNR <- FALSE
 big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
+
+#### If benchmarking, artifically remove KNR labels from peaks in truth set. If not benchmarking, continue. ####
+if (truth_set != "None") {
+  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
+  true_bed <- read_tsv(truth_set, col_names=c("chr", "start", "end", "name", "score", "strand"))
+
+#  true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
+  true_peak_list <- bt.intersect(a=big_bed, b=true_bed, wo=TRUE, S=TRUE)[, c("V4", "V10")]
+  colnames(true_peak_list) <- c("peak", "ins")
+
+  big_table$KNR[big_table$peak %in% true_peak_list$peak] <- FALSE 
+  write_tsv(true_peak_list, true_peak_file)
+}
 
 big_table$UNK <- FALSE
 big_table$SOM_clonal <- FALSE
@@ -176,7 +177,7 @@ big_table$classification[big_table$KR] <- "KR"
 big_table$classification[big_table$Off_target_amplification] <- "Off_target"
 
 
-####Plotting ####
+#### Plotting ####
 
 filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs),group=classification , color=classification, fill=classification)) +
   geom_bar() +
@@ -310,10 +311,6 @@ if (library != "bulk") {
   cat(paste0("Number of templates less than 3: " , nrow(big_table[big_table$filter_reason == "num_templates",] )),file=summary_file,sep="\n")
 }
 
-# Remove candidate novel peaks that do not carry the G-motif
-# big_table$filter_reason[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- "gmotif"
-# big_table$FP[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- TRUE
-# cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(big_table[big_table$filter_reason == "gmotif",] )),file=summary_file,sep="\n")
 
 # if(library != "single"){
 #   big_table$filter_reason[(big_table$RPM <= 5 & (big_table$KR | big_table$KNR) & !(big_table$FP)) ] <-"RPM" 
@@ -348,20 +345,32 @@ big_table$filter_reason[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$
 big_table$FP[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- TRUE
 cat(paste0("ALR/Alpha Satellite overlapping: " , nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),file=summary_file,sep="\n")
 
-# big_table$filter_reason[(big_table$SegDups != ".") & !(big_table$FP)] <- "SegDup"
-# big_table$FP[(big_table$SegDups != ".") & !(big_table$FP)] <- TRUE
-# cat(paste0("SegDups: " , nrow(big_table[big_table$filter_reason == "SegDup",] )),file=summary_file,sep="\n")
-
 if(library == "bulk"){
-  big_table$filter_reason[(big_table$RPM <= 1 ) ] <-"RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
-  big_table$FP[(big_table$RPM <= 1)  ]<- TRUE  #| (big_table$RPM <= 1 & !(big_table$KR | big_table$KNR)& !(big_table$FP))
+  big_table$filter_reason[(big_table$RPM <= 1) & !(big_table$FP)] <- "RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
+  big_table$FP[(big_table$RPM <= 1) & !(big_table$FP)] <- TRUE  #| (big_table$RPM <= 1 & !(big_table$KR | big_table$KNR)& !(big_table$FP))
   cat(paste0("RPM less than or equal 1: " , nrow(big_table[(big_table$filter_reason == "RPM" ) ,] )),file=summary_file,sep="\n")
 }else {
-  big_table$filter_reason[(big_table$RPM <= 5 ) ] <-"RPM" #<- "RPM" & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP))
-  big_table$FP[(big_table$RPM <= 5 )]<- TRUE
+  big_table$filter_reason[(big_table$RPM <= 5) ] <-"RPM" # <- "RPM" & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP))
+  big_table$FP[(big_table$RPM <= 5)]<- TRUE
   cat(paste0("RPM less than or equal 5: " , nrow(big_table[big_table$filter_reason == "RPM" ,] )),file=summary_file,sep="\n")
 }
 
+# Filter out peaks in error_prone regions if regions are provided
+#if (error_prone != "None") {
+#  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
+#  error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chr", "start", "end"))
+  
+#  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
+  
+#  if (truth_set != "None") {
+#    error_peak_list <- error_peak_list[!error_peak_list %in% true_peak_list$peak]
+#  }
+
+#  big_table$filter_reason[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- "error-prone"
+#  big_table$FP[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- TRUE
+#  cat(paste0("Overlapping error-prone region: ", nrow(big_table[big_table$filter_reason == "error-prone",])), file=summary_file, sep="\n")
+#  write_lines(error_peak_list, error_peak_file)
+#}
 
 # #testing clustering of each group after all other filters have been applied 
 # library(mixtools)
@@ -389,7 +398,6 @@ if(library == "bulk"){
 #  plot(wait4, density=TRUE, loglik=FALSE)
 #  big_table$RPM_distribution[big_table$KR] <- wait4$posterior[,which.max(wait4$mu)] > wait4$posterior[,which.min(wait4$mu)]
 # # # 
-
 
 
 cat(paste0("Total peaks after filtering: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
