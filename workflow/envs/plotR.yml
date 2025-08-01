@@ -3,8 +3,9 @@ channels:
   - conda-forge
   - bioconda
   - r
+  - defaults
 dependencies:
-  - bedtools
+  - bedtools=2.30.0
   - r-base
   - r-upsetr
   - r-stringr
@@ -14,4 +15,5 @@ dependencies:
   - r-ggpubr
   - r-ggsci
   - r-circlize
+  - r-bedtoolsr
   

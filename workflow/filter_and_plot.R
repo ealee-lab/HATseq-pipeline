@@ -1,26 +1,15 @@
-library(UpSetR) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(stringr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")#error
-library(reshape) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(ggplot2) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")#error
-library(tidyverse) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(RColorBrewer) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(ggpubr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(ggsci) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(bedtoolsr)
+library(UpSetR) 
+library(stringr) 
+library(reshape) 
+library(ggplot2) 
+library(tidyverse) 
+library(RColorBrewer) 
+library(ggpubr) 
+library(ggsci) 
 #library(circlize)
 
 args<-commandArgs(TRUE)
- #args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_big_table.tsv", "bulk", 
-  #          "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtering_plots.pdf", 
-   #         "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtered_peaks.tsv",
-    #        "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_custom_transduction.bed",
-     #       "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_summary.txt")
-# args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_big_table.tsv",
-#           "microbulk",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_filtering_plots.pdf",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_filtered_peaks.tsv",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_custom_transduction.bed",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_summary.txt")
 
 big_table_file <- args[1]
 library <- args[2]
@@ -31,27 +20,12 @@ error_prone <- args[6]
 truth_set <- args[7]
 genome <- args[8]
 
-# Files not tracked by Snakemake
+# File not tracked by Snakemake
 big_table_filter_annotation_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_big_table_filter_reasons.tsv")
-true_peak_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_true_peak_list.txt")
-error_peak_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_error_peak_list.txt")
 
-#debug/run manually
-#big_table_file <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_big_table.tsv" #.hapmap_intersect_all.txt"
-#library <- "single"
-#plots_path <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_all_plots.pdf"
-#transduction_bed_file <- "~/ANR/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_custom_transduction.bed"
-#filtered_peaks <- "~/ANR/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_filtered_peaks.tsv"
-#summary <- paste0(filtered_peaks, "_summary.txt")
-# big_table_file <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_big_table.tsv"
-# library <- "bulk" #sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50
-# plots_path <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_filtering_plots.pdf"
-# filtered_peaks  <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_filtered_peaks.tsv"
-#transduction_bed_file  <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_custom_transduction.bed"
-# summary <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_summary.txt"
-
+# Read input and define columns
 canonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
-big_table <- read.table(big_table_file,sep="\t")
+big_table <- read.table(big_table_file, sep="\t")
 colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 #colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp","RPM","custompeakname","nearest_peak","SegDups","max_distance","chrgts","startgts","endgts","chrgts2","startgts2","sam1","sam2","sam3","sam4","sam5","sam6","something","something2","something3","level","number","overlap")
 
@@ -79,6 +53,9 @@ big_table$polymer_annotation <- FALSE
 big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
 big_table$RPM_log <- log(big_table$RPM)
 
+if (error_prone != "None") { 
+  big_table$error_prone <- FALSE # add optional column
+}
 
 ####
 
@@ -150,17 +127,16 @@ big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$r
 big_table$KNR <- FALSE
 big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
 
-#### If benchmarking, artifically remove KNR labels from peaks in truth set. If not benchmarking, continue. ####
+# If benchmarking, artifically remove KNR labels from peaks in truth set
 if (truth_set != "None") {
   big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
-  true_bed <- read_tsv(truth_set, col_names=c("chr", "start", "end", "name", "score", "strand"))
+  true_bed <- read_tsv(truth_set, col_names=c("chrm", "start", "end", "name", "score", "strand"), col_types="ciicdc")
 
-#  true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
-  true_peak_list <- bt.intersect(a=big_bed, b=true_bed, wo=TRUE, S=TRUE)[, c("V4", "V10")]
-  colnames(true_peak_list) <- c("peak", "ins")
+  true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
+  true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4", "V10")]
+  colnames(true_peak_list) <- c("peak", "true_insertion_ID")
 
   big_table$KNR[big_table$peak %in% true_peak_list$peak] <- FALSE 
-  write_tsv(true_peak_list, true_peak_file)
 }
 
 big_table$UNK <- FALSE
@@ -175,7 +151,6 @@ big_table$classification[big_table$KR] <- "KR"
 #big_table$classification[big_table$SOM_clonal] <- "Clonal_Somatic"
 #big_table$classification[big_table$SOM_private] <- "Private_Somatic"
 big_table$classification[big_table$Off_target_amplification] <- "Off_target"
-
 
 #### Plotting ####
 
@@ -281,7 +256,7 @@ filter_segdup <-ggplot(big_table, aes(x = (SegDups != '.'), group=classification
 
 #### Printing number of each filter ####
 summary_file <- file(summary, open='a')
-cat(paste0("\n####################Filtering results ",Sys.time(),"####################\n"),file=summary_file,sep="")
+cat(paste0("\n#################### Filtering results ",Sys.time(),"####################\n"),file=summary_file,sep="")
 big_table$filter_reason <- "-NA-"  
 cat(paste0("Total peaks: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 
@@ -356,21 +331,27 @@ if(library == "bulk"){
 }
 
 # Filter out peaks in error_prone regions if regions are provided
-#if (error_prone != "None") {
-#  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
-#  error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chr", "start", "end"))
-  
-#  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
-  
-#  if (truth_set != "None") {
-#    error_peak_list <- error_peak_list[!error_peak_list %in% true_peak_list$peak]
-#  }
+if (error_prone != "None") {
+  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
+  error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm", "start", "end"), col_types="cii")
+    
+  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
+    
+  if (truth_set != "None") {
+    error_peak_list <- error_peak_list[!error_peak_list %in% true_peak_list$peak]
+  }
 
-#  big_table$filter_reason[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- "error-prone"
-#  big_table$FP[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- TRUE
-#  cat(paste0("Overlapping error-prone region: ", nrow(big_table[big_table$filter_reason == "error-prone",])), file=summary_file, sep="\n")
-#  write_lines(error_peak_list, error_peak_file)
-#}
+  big_table$error_prone[big_table$peak %in% error_peak_list] <- TRUE
+  big_table$filter_reason[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- "error-prone"
+  big_table$FP[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- TRUE
+  cat(paste0("Overlapping error-prone region: ", nrow(big_table[big_table$filter_reason == "error-prone",])), file=summary_file, sep="\n")
+}
+
+# Add truth set info to table if provided
+if (truth_set != "None") {
+  big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE)
+  big_table[is.na(big_table)] <- "-NA-"
+}
 
 # #testing clustering of each group after all other filters have been applied 
 # library(mixtools)
@@ -439,7 +420,6 @@ cat(paste0("Total FP: " , nrow(big_table[big_table$classification == "FP",])),fi
 
 
 
-
 filter_reasons <- ggplot(big_table[big_table$classification == "FP",], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
@@ -458,7 +438,8 @@ filter_reasons_KR <- ggplot(big_table[big_table$KR,], aes(x=filter_reason, group
   ggtitle("Distribution of Filtering KR Peaks") + 
   ylab("Peak Count") + 
   xlab("Filter")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
 filter_reasons_KNR <- ggplot(big_table[big_table$KNR,], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
@@ -580,3 +561,4 @@ write.table(big_table[,lapply(big_table, class) != "list"] , big_table_filter_an
 # #circos.clear()
 # #dev.off()
 # dev.off()
+

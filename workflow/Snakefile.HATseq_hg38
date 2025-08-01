@@ -826,7 +826,7 @@ rule filter_and_classify:
 		igv_script = igv_script,
 		summary_file = summary_file
 	params: 
-		#use params to track optional files
+		#use params to pass optional files
 		error_prone = error_prone,
 		truth_set = truth_set,
 		hg38 = hg38
@@ -837,16 +837,8 @@ rule filter_and_classify:
 		mem_mb = 2000,
 		tmpdir = tmp_dir
 	shell:
-		"""
-		#conda deactivate
-		#source /programs/biogrids.shrc
-		Rscript {workflow.basedir}/filter_and_plot.R \
-			{input.big_table} {library} {output.plots} {output.filtered_peaks} {output.summary_file} \
-			{params.error_prone} {params.truth_set} {params.hg38}
-
-		awk -v OFS='\t' 'NR>1 {{print $2,$3,$4,$1}}' {output.filtered_peaks} | \
-			bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script}
-		"""
+		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {library} {output.plots} {output.filtered_peaks} {output.summary_file} {params.error_prone} {params.truth_set} {params.hg38}\n"
+		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script}"
 
 rule transduction_big_table: 
 	input:
