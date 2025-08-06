@@ -499,8 +499,13 @@ dev.off()
 # 
 # 
 
-#Filtered table
-filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
+# Filtered table
+if (truth_set != "None") {
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","true_insertion_ID")]
+} else {
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
+}
+
 #filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
 # 
 # filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA
