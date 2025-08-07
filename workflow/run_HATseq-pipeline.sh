@@ -25,7 +25,7 @@ library=$3
 snakefile=${HATseq_pipeline_directory}/workflow/Snakefile.${HATseq_version} 
 profile=${HATseq_pipeline_directory}/workflow/slurm
 configfile=${HATseq_pipeline_directory}/config/config.${library}.${sample_name}  
-directory=/path/to/output/${sample_name} 
+directory=/path/to/output 
 
 snakemake --unlock -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory}
 snakemake -s ${snakefile} --profile ${profile} --configfile ${configfile} --directory ${directory} --use-conda --conda-frontend conda

@@ -1,5 +1,4 @@
-# Pipeline for preprocessing, aligning, calling, and filtering candidate L1HS insertions from HATseq libraries
-
+#### Pipeline for preprocessing, aligning, calling, and filtering candidate L1HS insertions from HATseq libraries. ####
 
 # Import required libraries
 import pandas as pd
@@ -14,123 +13,123 @@ import gzip
 import statistics
 
 # Read config variables 
-sample_name = config["sample_name"]
-te_name = config["te_name"]
-index = config["index"]
-raw_fastq1 =  config["raw_fastq1"]
-raw_fastq2 = config["raw_fastq2"]
-reference_dir = config["reference_dir"]
-ref_genome = config["bwa_ref_genome"]
-library = config["library"]
-sequencing_platform = config['sequencing_platform']
-sequencing_center = config['sequencing_center']
-error_prone = config.get("error_prone", "None")
-truth_set = config.get("truth_set", "None")
+SAMPLE_NAME = config["sample_name"]
+TE_NAME = config["te_name"]
+INDEX = config["index"]
+RAW_FASTQ1 =  config["raw_fastq1"]
+RAW_FASTQ2 = config["raw_fastq2"]
+REFERENCE_DIR = config["reference_dir"]
+REF_GENOME = config["bwa_ref_genome"]
+LIBRARY = config["library"]
+SEQ_PLATFORM = config['sequencing_platform']
+SEQ_CENTER = config['sequencing_center']
+ERROR_PRONE = config.get("error_prone", "None")
+TRUTH_SET = config.get("truth_set", "None")
 
 # Create reference file variables 
-Evrony_KR = reference_dir + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
-repeat_masker = reference_dir + "/RepeatMasker/repeatmasker.v38.bed"
-repeat_masker_L1HS = reference_dir + "/RepeatMasker/repeatmasker.v38.L1HS.bed"
-homopolymers = reference_dir + "/human/hg38.hg19.homo8.chr.bed" #Lifted over
-hg38 = reference_dir + "/human/hg38.genome"
-L1HS_decoy = reference_dir + "/L1HS_decoy_sequence.fasta"
-i1kgp = reference_dir + "/1kgp/1kgp.AF.ME.final.hg38.bed"
-i1kgp_LINE1 = reference_dir + "/1kgp/1kgp.AF.ME.final.hg38.LINE1.bed"
-gnomad = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" 
-gnomad_LINE1 = reference_dir + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.LINE1.bed"
-xTea = reference_dir + "/xTea/xTea-Borges-Monroy2021.accessioned.bed"
-xTea_LINE1 = reference_dir + "/xTea/xTea-Borges-Monroy2021.accessioned.L1HS.bed"
-nyuwa = reference_dir + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
-nyuwa_LINE1 = reference_dir + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.LINE1.bed"
-segdups = reference_dir + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
+Evrony_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
+repeat_masker = REFERENCE_DIR + "/RepeatMasker/repeatmasker.v38.bed"
+repeat_masker_L1HS = REFERENCE_DIR + "/RepeatMasker/repeatmasker.v38.L1HS.bed"
+homopolymers = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" #Lifted over
+hg38 = REFERENCE_DIR + "/human/hg38.genome"
+L1HS_decoy = REFERENCE_DIR + "/L1HS_decoy_sequence.fasta"
+i1kgp = REFERENCE_DIR + "/1kgp/1kgp.AF.ME.final.hg38.bed"
+i1kgp_LINE1 = REFERENCE_DIR + "/1kgp/1kgp.AF.ME.final.hg38.LINE1.bed"
+gnomad = REFERENCE_DIR + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" 
+gnomad_LINE1 = REFERENCE_DIR + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.LINE1.bed"
+xTea = REFERENCE_DIR + "/xTea/xTea-Borges-Monroy2021.accessioned.bed"
+xTea_LINE1 = REFERENCE_DIR + "/xTea/xTea-Borges-Monroy2021.accessioned.L1HS.bed"
+nyuwa = REFERENCE_DIR + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
+nyuwa_LINE1 = REFERENCE_DIR + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.LINE1.bed"
+segdups = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
 
 
 # Set output path
-analysis_path = os.getcwd() + "/" + sample_name + "/analysis/" + sample_name + "_"
+ANALYSIS_PATH = os.getcwd() + "/" + SAMPLE_NAME + "/analysis/" + SAMPLE_NAME + "_"
 
 # Define QC and preprocessing files 
 # QC output
-illumina_adapter_trimmed_fastq1 = analysis_path + "illumina_adapter_trimmed_fastq1.gz"
-illumina_adapter_trimmed_fastq2 = analysis_path + "illumina_adapter_trimmed_fastq2.gz"
-fastp_html_report = analysis_path + "fastp_html_report.txt"
-fastqc_report_path = analysis_path + "fastqc_report/"
+illumina_adapter_trimmed_fastq1 = ANALYSIS_PATH + "illumina_adapter_trimmed_fastq1.gz"
+illumina_adapter_trimmed_fastq2 = ANALYSIS_PATH + "illumina_adapter_trimmed_fastq2.gz"
+fastp_html_report = ANALYSIS_PATH + "fastp_html_report.txt"
+fastqc_report_path = ANALYSIS_PATH + "fastqc_report/"
 
 # Preprocessing output        
-L1HS_adapter_trimmed_fromR2_fastq1 = analysis_path + "L1HS_adapter_trimmed_fromR2_fastq1.gz"
-L1HS_adapter_trimmed_fromR2_fastq2 = analysis_path + "L1HS_adapter_trimmed_fromR2_fastq2.gz"
-L1HS_primer_trimmed_fromR2_fastq1 = analysis_path + "L1HS_primer_trimmed_fromR2_fastq1.gz"
-L1HS_primer_trimmed_fromR2_fastq2 = analysis_path + "L1HS_primer_trimmed_fromR2_fastq2.gz"
-subfamily_specific_R2_list = analysis_path + "subfamily_specific_R2_list.txt"
-L1HS_adapter_trimmed_fromR1_fastq1 = analysis_path + "L1HS_adapter_trimmed_fromR1_fastq1.gz"
-L1HS_primer_trimmed_fromR1_fastq1 = analysis_path + "L1HS_primer_trimmed_fromR1_fastq1.gz"
-L1HS_untrimmed_fromR1_fastq1 = analysis_path + "L1HS_untrimmed_fromR1_fastq1.gz"
-mappable_R1_list = analysis_path + "mappable_R1_list.txt"
-mappable_R1_fastq1 = analysis_path + "mappable_R1_fastq1.gz"
-mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = analysis_path + "mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
-mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1 = analysis_path + "mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
-cutadapt_report = analysis_path + "cutadapt_report.txt"
+L1HS_adapter_trimmed_fromR2_fastq1 = ANALYSIS_PATH + "L1HS_adapter_trimmed_fromR2_fastq1.gz"
+L1HS_adapter_trimmed_fromR2_fastq2 = ANALYSIS_PATH + "L1HS_adapter_trimmed_fromR2_fastq2.gz"
+L1HS_primer_trimmed_fromR2_fastq1 = ANALYSIS_PATH + "L1HS_primer_trimmed_fromR2_fastq1.gz"
+L1HS_primer_trimmed_fromR2_fastq2 = ANALYSIS_PATH + "L1HS_primer_trimmed_fromR2_fastq2.gz"
+subfamily_specific_R2_list = ANALYSIS_PATH + "subfamily_specific_R2_list.txt"
+L1HS_adapter_trimmed_fromR1_fastq1 = ANALYSIS_PATH + "L1HS_adapter_trimmed_fromR1_fastq1.gz"
+L1HS_primer_trimmed_fromR1_fastq1 = ANALYSIS_PATH + "L1HS_primer_trimmed_fromR1_fastq1.gz"
+L1HS_untrimmed_fromR1_fastq1 = ANALYSIS_PATH + "L1HS_untrimmed_fromR1_fastq1.gz"
+mappable_R1_list = ANALYSIS_PATH + "mappable_R1_list.txt"
+mappable_R1_fastq1 = ANALYSIS_PATH + "mappable_R1_fastq1.gz"
+mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = ANALYSIS_PATH + "mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
+mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1 = ANALYSIS_PATH + "mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
+cutadapt_report = ANALYSIS_PATH + "cutadapt_report.txt"
 
 # Alignment output
-bwa_bam =  analysis_path + "bwa.bam"
-bwa_sorted_bam = analysis_path + "bwa_sorted.bam"
-bwa_sorted_index = analysis_path + "bwa_sorted.bam.bai"
-peak_sorted_bam = analysis_path + "peak_sorted_bwa.bam"
-peak_sorted_index = analysis_path + "peak_sorted_bwa.bam.bai"
-trim_bwa_bam = analysis_path + "trim_bwa.bam"
-trim_uniq_bam = analysis_path + "trim_uniq.bam"  #This is now containing the trimmed reads so that we can be more careful 
-trim_uniq_sorted_bam = analysis_path + "trim_uniq_sorted.bam"
-trim_uniq_sorted_index = analysis_path + "trim_uniq_sorted.bam.bai"
-trim_peaks = analysis_path + "trim_peaks.bed" 
+bwa_bam =  ANALYSIS_PATH + "bwa.bam"
+bwa_sorted_bam = ANALYSIS_PATH + "bwa_sorted.bam"
+bwa_sorted_index = ANALYSIS_PATH + "bwa_sorted.bam.bai"
+peak_sorted_bam = ANALYSIS_PATH + "peak_sorted_bwa.bam"
+peak_sorted_index = ANALYSIS_PATH + "peak_sorted_bwa.bam.bai"
+trim_bwa_bam = ANALYSIS_PATH + "trim_bwa.bam"
+trim_uniq_bam = ANALYSIS_PATH + "trim_uniq.bam"  #This is now containing the trimmed reads so that we can be more careful 
+trim_uniq_sorted_bam = ANALYSIS_PATH + "trim_uniq_sorted.bam"
+trim_uniq_sorted_index = ANALYSIS_PATH + "trim_uniq_sorted.bam.bai"
+trim_peaks = ANALYSIS_PATH + "trim_peaks.bed" 
 
 # Peak calling 
-peaks = analysis_path + "peaks.bed" 
-minus_breakpoint_fa = analysis_path + "minus_breakpoint.fa"
-plus_breakpoint_fa = analysis_path + "plus_breakpoint.fa" 
-breakpoint_fa = analysis_path + "breakpoint.fa"
-unique_start_positions = analysis_path + "unique_start_positions.bed"
-intersect_annotated = analysis_path + "intersect_annotated.bed"
+peaks = ANALYSIS_PATH + "peaks.bed" 
+minus_breakpoint_fa = ANALYSIS_PATH + "minus_breakpoint.fa"
+plus_breakpoint_fa = ANALYSIS_PATH + "plus_breakpoint.fa" 
+breakpoint_fa = ANALYSIS_PATH + "breakpoint.fa"
+unique_start_positions = ANALYSIS_PATH + "unique_start_positions.bed"
+intersect_annotated = ANALYSIS_PATH + "intersect_annotated.bed"
 
 # Filter files 
-pass_gmotif_list = analysis_path + "pass_gmotif_list.txt" 
-Ntag_pre_fastq2 = analysis_path + "Ntag_pre_fastq2.gz"
-Ntag_trimmed_fastq2 = analysis_path + "Ntag_trimmed_fastq2.gz"
-Ntag_list = analysis_path + "Ntag_list.txt"
-softclip3p_fasta = analysis_path + "softclip_3p.fa.gz"
-softclip5p_fasta = analysis_path + "softclip_5p.fa.gz"
-hardclip3p_table = analysis_path + "hardclip_3p.tsv"
-hardclip5p_table = analysis_path + "hardclip_5p.tsv"
-peak_seq = analysis_path +  "peak_sequence.fa"
-chimera = analysis_path + "chimera.txt"
-nonchimera = analysis_path + "nonchimera.txt"
-PTA_artifact = analysis_path + "PTA_artifact.txt"
-transduction_fasta = analysis_path + "custom_transduction.fasta"
-transduction_fasta_index = analysis_path + "custom_transduction.fasta.bwt"
-softclip3p_trimmed_fasta = analysis_path + "softclip_3p_trimmed.fa.gz"
-softclip5p_trimmed_fasta = analysis_path + "softclip_5p_trimmed.fa.gz"
-softclip3p_trimmed_bam = analysis_path + "softclip_3p_trimmed.bam"
-softclip5p_trimmed_bam = analysis_path + "softclip_5p_trimmed.bam"
-transduction_bed = analysis_path + "custom_transduction.bed"
-softclip3p_trimmed_bed = analysis_path + "softclip_3p_trimmed.bed"
-softclip5p_trimmed_bed = analysis_path + "softclip_5p_trimmed.bed"
-peak_readID_list = analysis_path + "peak_readID_list.txt"
-peak_custompeak_list = analysis_path + "peak_custompeak_list.txt"
-hardclip3p_bed = analysis_path + "hardclip_3p.bed"
-hardclip5p_bed = analysis_path + "hardclip_5p.bed"
-big_table = analysis_path + "big_table.tsv"
-nearby_peaks = analysis_path + "nearby_peaks.tsv"
-misalignment = analysis_path + "misalignment.txt"
-segdup_intersect = analysis_path + "segdup_intersect.bed"
-max_depth = analysis_path + "max_depth_distance_to_boundary.txt"
-polyA_trimmed = analysis_path + "polyA_trimmed.txt"
-plots = analysis_path + "filtering_plots.pdf"
-filtered_peaks = analysis_path + "filtered_peaks.tsv" 
-transduction_support = analysis_path + "transduction_support.tsv"
-igv_script = analysis_path + "igv.sh"
-summary_file = analysis_path + "summary.txt"
-chimera_hash = analysis_path + "chimera_hash.txt"
-transduction_plots = analysis_path + "transduction_plots.pdf" 
-filtered_transduction = analysis_path + "filtered_transduction.tsv"
-transduction_big_table = analysis_path + "transduction_big_table.tsv"
+pass_gmotif_list = ANALYSIS_PATH + "pass_gmotif_list.txt" 
+Ntag_pre_fastq2 = ANALYSIS_PATH + "Ntag_pre_fastq2.gz"
+Ntag_trimmed_fastq2 = ANALYSIS_PATH + "Ntag_trimmed_fastq2.gz"
+Ntag_list = ANALYSIS_PATH + "Ntag_list.txt"
+softclip3p_fasta = ANALYSIS_PATH + "softclip_3p.fa.gz"
+softclip5p_fasta = ANALYSIS_PATH + "softclip_5p.fa.gz"
+hardclip3p_table = ANALYSIS_PATH + "hardclip_3p.tsv"
+hardclip5p_table = ANALYSIS_PATH + "hardclip_5p.tsv"
+peak_seq = ANALYSIS_PATH +  "peak_sequence.fa"
+chimera = ANALYSIS_PATH + "chimera.txt"
+nonchimera = ANALYSIS_PATH + "nonchimera.txt"
+PTA_artifact = ANALYSIS_PATH + "PTA_artifact.txt"
+transduction_fasta = ANALYSIS_PATH + "custom_transduction.fasta"
+transduction_fasta_index = ANALYSIS_PATH + "custom_transduction.fasta.bwt"
+softclip3p_trimmed_fasta = ANALYSIS_PATH + "softclip_3p_trimmed.fa.gz"
+softclip5p_trimmed_fasta = ANALYSIS_PATH + "softclip_5p_trimmed.fa.gz"
+softclip3p_trimmed_bam = ANALYSIS_PATH + "softclip_3p_trimmed.bam"
+softclip5p_trimmed_bam = ANALYSIS_PATH + "softclip_5p_trimmed.bam"
+transduction_bed = ANALYSIS_PATH + "custom_transduction.bed"
+softclip3p_trimmed_bed = ANALYSIS_PATH + "softclip_3p_trimmed.bed"
+softclip5p_trimmed_bed = ANALYSIS_PATH + "softclip_5p_trimmed.bed"
+peak_readID_list = ANALYSIS_PATH + "peak_readID_list.txt"
+peak_custompeak_list = ANALYSIS_PATH + "peak_custompeak_list.txt"
+hardclip3p_bed = ANALYSIS_PATH + "hardclip_3p.bed"
+hardclip5p_bed = ANALYSIS_PATH + "hardclip_5p.bed"
+big_table = ANALYSIS_PATH + "big_table.tsv"
+nearby_peaks = ANALYSIS_PATH + "nearby_peaks.tsv"
+misalignment = ANALYSIS_PATH + "misalignment.txt"
+segdup_intersect = ANALYSIS_PATH + "segdup_intersect.bed"
+max_depth = ANALYSIS_PATH + "max_depth_distance_to_boundary.txt"
+polyA_trimmed = ANALYSIS_PATH + "polyA_trimmed.txt"
+plots = ANALYSIS_PATH + "filtering_plots.pdf"
+filtered_peaks = ANALYSIS_PATH + "filtered_peaks.tsv" 
+transduction_support = ANALYSIS_PATH + "transduction_support.tsv"
+igv_script = ANALYSIS_PATH + "igv.sh"
+summary_file = ANALYSIS_PATH + "summary.txt"
+chimera_hash = ANALYSIS_PATH + "chimera_hash.txt"
+transduction_plots = ANALYSIS_PATH + "transduction_plots.pdf" 
+filtered_transduction = ANALYSIS_PATH + "filtered_transduction.tsv"
+transduction_big_table = ANALYSIS_PATH + "transduction_big_table.tsv"
 
 # Define rules
 rule HATseq:
@@ -151,8 +150,8 @@ rule HATseq:
 
 rule qc: 
 	input:
-		raw_fastq1 = raw_fastq1,
-		raw_fastq2 = raw_fastq2 
+		raw_fastq1 = RAW_FASTQ1,
+		raw_fastq2 = RAW_FASTQ2 
 	output:
 		illumina_adapter_trimmed_fastq1 = illumina_adapter_trimmed_fastq1, 
 		illumina_adapter_trimmed_fastq2 = illumina_adapter_trimmed_fastq2,
@@ -164,7 +163,7 @@ rule qc:
 	threads: 4
 	resources:
 		runtime = 60,
-		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 4000),
+		mem_mb = lambda wildcards, input: input.size_mb,
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} -i {input.raw_fastq1} -I {input.raw_fastq2} -o {output.illumina_adapter_trimmed_fastq1} -O {output.illumina_adapter_trimmed_fastq2} -h {output.fastp_html_report} -j /dev/null \n" # Run fastp 
 		"mkdir -p {fastqc_report_path} && fastqc -t {threads} -o {params.fastqc_report_path}  --noextract --nogroup {input.raw_fastq1} {input.raw_fastq2} \n" #Run fastqc 
@@ -192,7 +191,7 @@ rule preprocessing:
 		min_len_informative = 70,
 		min_ovlp = 20,
 		max_err = 0.05,
-		adapter_L1HS = index + "GGGAGATATACCTAATGCTAGATGACAC" ,
+		adapter_L1HS = INDEX + "GGGAGATATACCTAATGCTAGATGACAC" ,
 		adapter_primer = "^TTAGTGGGTGCAGCGCACCA" ,
 		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC" ,
 		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
@@ -203,7 +202,7 @@ rule preprocessing:
 	threads: 4
 	resources:
 		runtime = 60,
-		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 4000),
+		mem_mb = lambda wildcards, input: input.size_mb,
 	shell:
 		"set -x \n"
 		"cutadapt -j {threads} -m {params.min_len} -g {params.adapter_L1HS} --discard-untrimmed -O 10 -e 0.08 -p {output.L1HS_adapter_trimmed_fromR2_fastq1} -o {output.L1HS_adapter_trimmed_fromR2_fastq2} {input.illumina_adapter_trimmed_fastq2} {input.illumina_adapter_trimmed_fastq1} >> {output.cutadapt_report} \n" #Remove the L1HS adapter from R2 filtering pairs where R2 does not contain the sequence. R1 and R2 fastqs are swapped and the sequence is with respect to the 5' of R2
@@ -220,7 +219,7 @@ rule preprocessing:
 		
 rule alignment:
 	input:
-		ref_genome = ref_genome,
+		ref_genome = REF_GENOME,
 		mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = mappable_R1_L1HSsequence_trimmed_fromR1_fastq1,
 		mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1 = mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1
 	output:
@@ -235,11 +234,11 @@ rule alignment:
 		peak_sorted_bam = peak_sorted_bam,
 		peak_sorted_index = peak_sorted_index
 	params:
-		RG_ID = r"-R '@RG\tID:" + te_name + r"\tSM:" + sample_name + r"\tPL:" + sequencing_platform + r"\tLB:HAT-seq\tCN:" + sequencing_center + "'"
+		RG_ID = r"-R '@RG\tID:" + TE_NAME + r"\tSM:" + SAMPLE_NAME + r"\tPL:" + SEQ_PLATFORM + r"\tLB:HAT-seq\tCN:" + SEQ_CENTER + "'"
 	threads: 8 
 	resources:
 		runtime = 60,
-		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 12000),
+		mem_mb = lambda wildcards, input: 4 * input.size_mb,
 	shell:
 		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} |  samtools view -Sb - > {output.bwa_bam} \n"
 		"samtools sort -o {output.bwa_sorted_bam} {output.bwa_bam} \n"
@@ -248,7 +247,7 @@ rule alignment:
 		"samtools view -q 20 {output.trim_bwa_bam}| awk '{{for (i=1;i<=NF;i++) {{if ($i ~/AS:i:/) {{split ($i,a,\":\") }} ;if ($i ~/XS:i:/) {{split ($i,b,\":\")}}  }}; if (a[3]>b[3]) print; }}' | awk '{{for (i=1;i<=NF;i++) {{if ($i ~/NM:i:/) {{split ($i,a,\":\") ;if (a[3]<4) print; }}}}}}' | cat <(samtools view -H {output.trim_bwa_bam}) - | samtools view -Sb - > {output.trim_uniq_bam} \n"
 		"samtools sort -o {output.trim_uniq_sorted_bam} {output.trim_uniq_bam}  \n"
 		"samtools index {output.trim_uniq_sorted_bam} \n"
-		"cat <(genomeCoverageBed -ibam {output.trim_uniq_sorted_bam} -bg -strand \"+\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"+\",$3-$2}}') <(genomeCoverageBed -ibam {output.trim_uniq_sorted_bam} -bg -strand \"-\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"-\",$3-$2}}' ) |  sort -k1,1 -k2,2n | mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$2,$3,\"{sample_name}-plus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} else {{print $1,$2,$3,\"{sample_name}-minus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} }}' >> {output.trim_peaks} \n"
+		"cat <(genomeCoverageBed -ibam {output.trim_uniq_sorted_bam} -bg -strand \"+\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"+\",$3-$2}}') <(genomeCoverageBed -ibam {output.trim_uniq_sorted_bam} -bg -strand \"-\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"-\",$3-$2}}' ) |  sort -k1,1 -k2,2n | mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$2,$3,\"{SAMPLE_NAME}-plus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} else {{print $1,$2,$3,\"{SAMPLE_NAME}-minus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} }}' >> {output.trim_peaks} \n"
 		"samtools view --region-file {output.trim_peaks} {output.bwa_sorted_bam} | cat <(samtools view -H {output.bwa_bam}) -  | samtools sort -o {output.peak_sorted_bam} - \n"
 		"sambamba index {output.peak_sorted_bam} \n"
 
@@ -273,10 +272,10 @@ rule Ntag:
 		Ntag_trimmed_fastq2 = Ntag_trimmed_fastq2,
 		Ntag_list = Ntag_list
 	params:
-		adapter = index + "GGGAGATATACCTAATGCTAGATGACAC"
+		adapter = INDEX + "GGGAGATATACCTAATGCTAGATGACAC"
 	threads: 2 
 	resources:
-		runtime = 10,
+		runtime = 15,
 		mem_mb = lambda wildcards, input: input.size_mb,
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - > {output.Ntag_pre_fastq2} \n"
@@ -350,11 +349,9 @@ rule peak_calling:
 	input:
 		peak_sorted_bam = peak_sorted_bam,
 		hg38 = hg38,
-		ref_genome = ref_genome
+		ref_genome = REF_GENOME
 	output:
 		peaks = peaks,
-		#minus_breakpoint_fa = minus_breakpoint_fa,
-		#plus_breakpoint_fa = plus_breakpoint_fa,
 		max_depth = max_depth,
 		breakpoint_fa = breakpoint_fa,
 		peak_seq = peak_seq
@@ -363,7 +360,7 @@ rule peak_calling:
 		mem_mb = lambda wildcards, input: 2 * input.size_mb,
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' > {output.peaks} \n"
-		"cat <(genomeCoverageBed -ibam {input.peak_sorted_bam} -bg -strand \"+\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"+\",$3-$2}}') <(genomeCoverageBed -ibam {input.peak_sorted_bam} -bg -strand \"-\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"-\",$3-$2}}' ) |  sort -k1,1 -k2,2n | mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$2,$3,\"{sample_name}-plus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} else {{print $1,$2,$3,\"{sample_name}-minus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} }}' >> {output.peaks} \n"
+		"cat <(genomeCoverageBed -ibam {input.peak_sorted_bam} -bg -strand \"+\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"+\",$3-$2}}') <(genomeCoverageBed -ibam {input.peak_sorted_bam} -bg -strand \"-\" | awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,\".\",\"-\",$3-$2}}' ) |  sort -k1,1 -k2,2n | mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | awk '{{OFS=\"\\t\"; if($6 == \"+\") {{print $1,$2,$3,\"{SAMPLE_NAME}-plus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} else {{print $1,$2,$3,\"{SAMPLE_NAME}-minus-peak-\"NR,$4\";\"$8\";\"$7\";\"$5,$6}} }}' >> {output.peaks} \n"
 		"awk '{{OFS=\"\\t\"; split($5,a,\";\") ; split(a[4],b,\",\"); split(a[3],c,\",\") ; sum=0 ; stop=1; if($6 == \"+\") {{for(i=length(b);i>0; i=i-1) {{if(b[i] < a[2]) {{sum=sum+(stop*c[i])}} else {{stop=0}}}} }} else {{for(i=1;i<length(b)+1; i=i+1) {{if(b[i] < a[2]) {{sum=sum+(stop*c[i])}} else {{stop=0}} }} }} print $4,sum}}' {output.peaks} > {output.max_depth} \n"
 		"slopBed -l 30 -r 0 -s -g {input.hg38} -i <(awk '{{OFS=\"\\t\"; if($6 == \"-\") {{print $1,$2,$2+1,$4,$5,$6}} else {{print $1,$3,$3+1,$4,$5,$6}} }}' {output.peaks}) | bedtools getfasta -fi {input.ref_genome} -bed stdin -name > {output.breakpoint_fa} \n"
 		"bedtools getfasta -fi {input.ref_genome} -bed {output.peaks} -name > {output.peak_seq} \n"
@@ -415,7 +412,7 @@ rule map_transduction_fasta:
 		nyuwa_LINE1 = nyuwa_LINE1 ,
 		xTea_LINE1 = xTea_LINE1 ,
 		hg38 = hg38,
-		ref_genome = ref_genome,
+		ref_genome = REF_GENOME,
 		softclip3p_fasta = softclip3p_fasta,
 		softclip5p_fasta = softclip5p_fasta,
 		hardclip3p_table = hardclip3p_table,
@@ -437,14 +434,14 @@ rule map_transduction_fasta:
 	params:
 		adapter_T = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
 		min_length = 10,
-		RG_ID = r"-R '@RG\tID:" + te_name + r"\tSM:" + sample_name + r"\tPL:" + sequencing_platform + r"\tLB:HAT-seq\tCN:" + sequencing_center + "'"
+		RG_ID = r"-R '@RG\tID:" + TE_NAME + r"\tSM:" + SAMPLE_NAME + r"\tPL:" + SEQ_PLATFORM + r"\tLB:HAT-seq\tCN:" + SEQ_CENTER + "'"
 	threads: 8
 	resources:
 		runtime = 60,
 		mem_mb = 2000,
 	shell:
 		"set -x \n"
-		"cat {input.filtered_peaks} | awk '{{print $1,$2,$3,$4}}' | sort -k1,1 -k2,2n | bedtools merge -i stdin -c 4 -o collapse | awk '{{OFS=\"\\t\"; print $1,$2,$3,\"{sample_name}_custom_reference_\"NR, $4 }}' > {output.transduction_bed} \n"
+		"cat {input.filtered_peaks} | awk '{{print $1,$2,$3,$4}}' | sort -k1,1 -k2,2n | bedtools merge -i stdin -c 4 -o collapse | awk '{{OFS=\"\\t\"; print $1,$2,$3,\"{SAMPLE_NAME}_custom_reference_\"NR, $4 }}' > {output.transduction_bed} \n"
 		"bedtools getfasta -fi {input.ref_genome} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" #Everything is with respect to the reference at this point, fasta of loci and fasta of softclipped reads
 		"cat {L1HS_decoy} >> {output.transduction_fasta} \n" 
 		"bwa index {output.transduction_fasta} \n"
@@ -713,8 +710,8 @@ rule filter_and_classify:
 		summary_file = summary_file
 	params: 
 		#use params to pass optional files
-		error_prone = error_prone,
-		truth_set = truth_set,
+		error_prone = ERROR_PRONE,
+		truth_set = TRUTH_SET,
 		hg38 = hg38
 	conda:
 		"envs/plotR.yml"
@@ -722,8 +719,8 @@ rule filter_and_classify:
 		runtime = 10,
 		mem_mb = 500,
 	shell:
-		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {library} {output.plots} {output.filtered_peaks} {output.summary_file} {params.error_prone} {params.truth_set} {params.hg38}\n"
-		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {analysis_path} -i stdin > {output.igv_script}"
+		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} {params.error_prone} {params.truth_set} {params.hg38}\n"
+		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {ANALYSIS_PATH} -i stdin > {output.igv_script}"
 
 rule transduction_big_table: 
 	input:
@@ -736,8 +733,8 @@ rule transduction_big_table:
 	output:
 		transduction_big_table = transduction_big_table
 	resources:
-		runtime = 60,
-		mem_mb = 8000,
+		runtime = 20,
+		mem_mb = 5000,
 	run:
 		readIDs = pd.read_table(input.peak_readID_list , sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed , sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
@@ -771,8 +768,8 @@ rule call_transductions:
 		filtered_transduction = filtered_transduction
 	resources:
 		runtime = 10, 
-		mem_mb = 2000,
+		mem_mb = 1000,
 	shell:
 		"source /programs/biogrids.shrc \n" 
-		"Rscript {workflow.basedir}/transduction_calling.R {input.transduction_big_table} {library} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
+		"Rscript {workflow.basedir}/transduction_calling.R {input.transduction_big_table} {LIBRARY} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
 	
