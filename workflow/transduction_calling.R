@@ -5,8 +5,8 @@ library(ggplot2) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipelin
 library(tidyverse) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(RColorBrewer) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
 library(ggpubr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library("ggsci")#,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(statcomp)
+library(ggsci)#,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
+# library(statcomp)
 library(circlize)
 args<-commandArgs(TRUE)
  #args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_big_table.tsv", "bulk", 
