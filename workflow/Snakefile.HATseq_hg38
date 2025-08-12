@@ -294,9 +294,9 @@ rule extract_clipping:
 		runtime = 10,
 		mem_mb = lambda wildcards, input: input.size_mb,
 	run:
-		ofasta5p=gzip.open(output.softclip5p_fasta , 'wt')
+		ofasta5p=gzip.open(output.softclip5p_fasta, 'wt')
 		otable5p=open(output.hardclip5p_table, 'w')
-		ofasta3p=gzip.open(output.softclip3p_fasta , 'wt')
+		ofasta3p=gzip.open(output.softclip3p_fasta, 'wt')
 		otable3p=open(output.hardclip3p_table, 'w')
 		def reverse_complement(seq):
 			complement = {'A':'T', 'T':'A', 'G':'C', 'C':'G', 'N':'N'}
@@ -405,13 +405,7 @@ rule segdup:
 rule map_transduction_fasta:
 	input:
 		filtered_peaks = filtered_peaks,
-		Evrony_KR = Evrony_KR,
-		repeat_masker_L1HS = repeat_masker_L1HS,
-		i1kgp_LINE1 = i1kgp_LINE1,
-		gnomad_LINE1 = gnomad_LINE1,
-		nyuwa_LINE1 = nyuwa_LINE1 ,
-		xTea_LINE1 = xTea_LINE1 ,
-		hg38 = hg38,
+		L1HS_decoy = L1HS_decoy,
 		ref_genome = REF_GENOME,
 		softclip3p_fasta = softclip3p_fasta,
 		softclip5p_fasta = softclip5p_fasta,
@@ -443,7 +437,7 @@ rule map_transduction_fasta:
 		"set -x \n"
 		"cat {input.filtered_peaks} | awk '{{print $1,$2,$3,$4}}' | sort -k1,1 -k2,2n | bedtools merge -i stdin -c 4 -o collapse | awk '{{OFS=\"\\t\"; print $1,$2,$3,\"{SAMPLE_NAME}_custom_reference_\"NR, $4 }}' > {output.transduction_bed} \n"
 		"bedtools getfasta -fi {input.ref_genome} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" #Everything is with respect to the reference at this point, fasta of loci and fasta of softclipped reads
-		"cat {L1HS_decoy} >> {output.transduction_fasta} \n" 
+		"cat {input.L1HS_decoy} >> {output.transduction_fasta} \n" 
 		"bwa index {output.transduction_fasta} \n"
 		"cutadapt -g X{params.adapter_T} -m {params.min_length} -o {output.softclip3p_trimmed_fasta} {input.softclip3p_fasta} >> {input.cutadapt_report} \n"
 		"cutadapt -a {params.adapter_T}X -m {params.min_length} -o {output.softclip5p_trimmed_fasta} {input.softclip5p_fasta} >> {input.cutadapt_report} \n"
@@ -719,7 +713,7 @@ rule filter_and_classify:
 		runtime = 10,
 		mem_mb = 1000,
 	shell:
-		"Rscript {workflow.basedir}/filter_and_plot.R {input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} {params.error_prone} {params.truth_set} {params.hg38}\n"
+		"Rscript {workflow.basedir}/scripts/filter_and_plot.R {input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} {params.error_prone} {params.truth_set} {params.hg38}\n"
 		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | bedtools igv -name -slop 200 -path {ANALYSIS_PATH} -i stdin > {output.igv_script}"
 
 rule transduction_big_table: 
@@ -772,5 +766,5 @@ rule call_transductions:
 		runtime = 10, 
 		mem_mb = 1000,
 	shell:
-		"Rscript {workflow.basedir}/transduction_calling.R {input.transduction_big_table} {LIBRARY} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
+		"Rscript {workflow.basedir}/scripts/transduction_calling.R {input.transduction_big_table} {LIBRARY} {output.transduction_plots} {output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks}\n"
 	
