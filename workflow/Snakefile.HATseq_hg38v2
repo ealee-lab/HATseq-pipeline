@@ -94,8 +94,8 @@ rule preprocessing:
 		L1HS_untrimmed_fromR1_fastq1 = "{sample}/{sample}_L1HS_untrimmed_fromR1_fastq1.gz",
 		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
 		mappable_R1_fastq1 = "{sample}/{sample}_mappable_R1_fastq1.gz",
-		mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
-		mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
+		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
+		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
 		cutadapt_report = "{sample}/{sample}_cutadapt_report.txt"
 	params:
 		min_len = 5,
@@ -106,8 +106,8 @@ rule preprocessing:
 		adapter_primer = "^TTAGTGGGTGCAGCGCACCA" ,
 		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC" ,
 		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
-		L1PA_young_sequence = "TTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
-		L1HSsequence = "ATTATACTCTAAGTTTTAGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAATGTGTCATCTAGCATTAGGTATATCTCCC",
+		L1PA_young_seq = "TTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
+		L1HSseq = "ATTATACTCTAAGTTTTAGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAATGTGTCATCTAGCATTAGGTATATCTCCC",
 		max_err_T = 0,
 		adapter_T = "TTTTTTTT" 
 	threads: 4
@@ -135,7 +135,7 @@ rule preprocessing:
 
 		# Remove R2 that don't contain a sequence specific to the L1PA young subfamily of transposons
 		"cutadapt -j {threads} "
-			"--discard-untrimmed -g {params.L1PA_young_sequence} -e 0.05 -O 20 "
+			"--discard-untrimmed -g {params.L1PA_young_seq} -e 0.05 -O 20 "
 			"{output.L1HS_adapter_trimmed_fromR2_fastq2} | "
 			"seqkit seq -i -n - "
 			"> {output.subfamily_specific_R2_list} \n" 
@@ -171,21 +171,21 @@ rule preprocessing:
 			"> {output.mappable_R1_fastq1} \n" 
 
 		"cutadapt -j {threads} "
-			"-m {params.min_len} -a {params.L1HSsequence} -O {params.min_ovlp} -e {params.max_err} "
-			"-o {output.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} "
+			"-m {params.min_len} -a {params.L1HSseq} -O {params.min_ovlp} -e {params.max_err} "
+			"-o {output.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} "
 			"{output.mappable_R1_fastq1} "
 			">> {output.cutadapt_report} \n"
 
 		"cutadapt -a {params.adapter_T} -e {params.max_err_T} "
-			"-o {output.mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1} "
-			"{output.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} "
+			"-o {output.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} "
+			"{output.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} "
 			">> {output.cutadapt_report} \n"		
 		
 rule alignment:
 	input:
 		ref_genome = REF_GENOME,
-		mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
-		mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
+		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
+		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
 	output:
 		bwa_bam = "{sample}/{sample}_bwa.bam",
 		bwa_sorted_bam = "{sample}/{sample}_bwa_sorted.bam", 
@@ -205,13 +205,13 @@ rule alignment:
 		mem_mb = lambda wildcards, input: 4 * input.size_mb,
 	shell:
 		# Map mappable parts of R1 to reference genome
-		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.bwa_bam} \n"
 		"samtools sort -o {output.bwa_sorted_bam} {output.bwa_bam} \n"
 		"samtools index {output.bwa_sorted_bam} \n"
 
-		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSsequence_polyA_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.trim_bwa_bam} \n"
 		# Unique read = read with MAPQ >= 20 and edit distance < 4
@@ -427,9 +427,9 @@ rule chimera_hash:
 		runtime = 10,
 		mem_mb = 100,
 	run:
-		sequences = open(input.breakpoint_fa , 'r')
-		peak = sequences.readline().strip("\n").strip(">") 
-		seq = sequences.readline().strip("\n").upper()
+		seqs = open(input.breakpoint_fa , 'r')
+		peak = seqs.readline().strip("\n").strip(">") 
+		seq = seqs.readline().strip("\n").upper()
 		hash = ['AA', 'AC', 'AG', 'AT', 'CA', 'CC', 'CG', 'CT', 'GA', 'GC', 'GG', 'GT', 'TA', 'TC', 'TG', 'TT' ]
 
 		with open(output.chimera_hash, 'w') as chim:
@@ -441,8 +441,8 @@ rule chimera_hash:
 					# Get percent of total possible dimers for each unique dimer
 					peak_hash.append(str(seq.count(key) / (len(seq) -2))) 
 				chim.write(peak + "\t" + "\t".join(peak_hash)  + "\t" + str(len(seq)) + "\n")
-				peak = sequences.readline().strip("\n").strip(">")
-				seq = sequences.readline().strip("\n").upper()
+				peak = seqs.readline().strip("\n").strip(">")
+				seq = seqs.readline().strip("\n").upper()
 
 rule segdup:
 	input:
@@ -563,7 +563,7 @@ rule map_transduction_fasta:
 
 rule junction_spanning:
 	input:
-		mappable_R1_L1HSsequence_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
+		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
 	output:
 		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt"
 	params:
@@ -574,7 +574,7 @@ rule junction_spanning:
 		mem_mb = lambda wildcards, input: input.size_mb,
 	shell:
 		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
-			"{input.mappable_R1_L1HSsequence_trimmed_fromR1_fastq1} | "
+			"{input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
 			"seqkit seq -i -n - "
 			"> {output.polyA_trimmed} \n"
 
@@ -587,7 +587,7 @@ rule count_templates:
 		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt"
 	resources:
 		runtime = 15,
-		mem_mb = lambda wildcards, input: 5 * input.size_mb,
+		mem_mb = lambda wildcards, input: 6 * input.size_mb,
 	run:
 		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
 		ibed=open(input.peaks, 'r')

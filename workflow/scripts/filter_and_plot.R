@@ -53,7 +53,7 @@ big_table$polymer_annotation <- FALSE
 big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
 big_table$RPM_log <- log(big_table$RPM)
 
-if (error_prone != "None") { 
+if (error_prone != "-NA-") { 
   big_table$error_prone <- FALSE # add optional column
 }
 
@@ -128,7 +128,7 @@ big_table$KNR <- FALSE
 big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
 
 # If benchmarking, artifically remove KNR labels from peaks in truth set
-if (truth_set != "None") {
+if (truth_set != "-NA-") {
   big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
   true_bed <- read_tsv(truth_set, col_names=c("chrm", "start", "end", "name", "score", "strand"), col_types="ciicdc")
 
@@ -331,13 +331,13 @@ if(library == "bulk"){
 }
 
 # Filter out peaks in error_prone regions if regions are provided
-if (error_prone != "None") {
+if (error_prone != "-NA-") {
   big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
   error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm", "start", "end"), col_types="cii")
     
   error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
     
-  if (truth_set != "None") {
+  if (truth_set != "-NA-") {
     error_peak_list <- error_peak_list[!error_peak_list %in% true_peak_list$peak]
   }
 
@@ -348,7 +348,7 @@ if (error_prone != "None") {
 }
 
 # Add truth set info to table if provided
-if (truth_set != "None") {
+if (truth_set != "-NA-") {
   big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE)
   big_table[is.na(big_table)] <- "-NA-"
 }
@@ -500,7 +500,7 @@ dev.off()
 # 
 
 # Filtered table
-if (truth_set != "None") {
+if (truth_set != "-NA-") {
   filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","true_insertion_ID")]
 } else {
   filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
