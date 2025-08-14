@@ -3,7 +3,7 @@ This is a pipeline for the Human Active Trasposon sequencing methodology.
 
 
 # Pipeline Setup #
-##Conda environment##
+## Conda environment ##
 Setting up the environment should require a large amount of memory, best to run on a compute job. Alternatively, you can check the conda.yml file and ensure that the correct versions of all required software are on your PATH and accessible by the pipeline. 
 ```
 cd setup
@@ -11,12 +11,12 @@ bash conda_create.sh
 conda activate 
 ```
 
-##Reference Folder##
+## Reference Folder ##
 ```
 unzip things, concatenate if needed (or could source original)
 ```
 
-##Config Files##
+## Config Files ##
 ```
 cd setup
 vim make_config.sh #Edit the paths to the correct files and directories on your server
