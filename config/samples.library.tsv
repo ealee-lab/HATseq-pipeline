@@ -1,0 +1,2 @@
+sample_name	raw_fastq1	raw_fastq2	index_seq	error-prone	truth-set
+sample	/path/to/read1	/path/to/read2	4-base_in-line_index	/path/to/file/with/error-prone/regions	/path/to/file/with/true/insertions

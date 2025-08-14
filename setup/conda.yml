@@ -1,4 +1,4 @@
-name: HATseq2
+name: HATseq
 channels:
  - conda-forge
  - bioconda

@@ -1,56 +1,37 @@
-library(UpSetR) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(stringr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")#error
-library(reshape) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(ggplot2) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")#error
-library(tidyverse) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(RColorBrewer) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library(ggpubr) #,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
-library("ggsci")#,lib="/lab-share/Gene-Lee-e2/Public/home/shayna/HATseq-pipeline/R-4.1")
+library(bedtoolsr)
+library(UpSetR) 
+library(stringr) 
+library(reshape) 
+library(ggplot2) 
+library(tidyverse) 
+library(RColorBrewer) 
+library(ggpubr) 
+library(ggsci) 
+#library(circlize)
+
 args<-commandArgs(TRUE)
- #args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_big_table.tsv", "bulk", 
-  #          "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtering_plots.pdf", 
-   #         "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_filtered_peaks.tsv",
-    #        "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_custom_transduction.bed",
-     #       "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Coriell_A1_newpipeline/analysis/Coriell_A1_newpipeline_summary.txt")
-# args <- c("/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_big_table.tsv",
-#           "microbulk",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_filtering_plots.pdf",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_filtered_peaks.tsv",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_custom_transduction.bed",
-#           "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/Micro_C1_batch2_newpipeline/analysis/Micro_C1_batch2_newpipeline_summary.txt")
 
 big_table_file <- args[1]
-big_table_filter_annotation_file <- paste0(big_table_file, "_filter_reasons.tsv")
 library <- args[2]
 plots_path <- args[3]
 filtered_peaks <- args[4]
-transduction_bed_file <- args[5]
-summary <- args[6]
-#summary <- paste0(filtered_peaks, "_summary.txt")
+summary <- args[5]
+error_prone <- args[6]
+truth_set <- args[7]
+genome <- args[8]
 
+# File not tracked by Snakemake
+big_table_filter_annotation_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks), "_big_table_filter_reasons.tsv")
 
-#debug/run manually
-#big_table_file <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_big_table.tsv" #.hapmap_intersect_all.txt"
-#library <- "single"
-#plots_path <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_all_plots.pdf"
-#transduction_bed_file <- "~/ANR/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_custom_transduction.bed"
-#filtered_peaks <- "~/ANR/data/output/lab-share/Gene-Lee-ANR-e2/shayna/data/output/HG002_H1_newpipeline/analysis/HG002_H1_newpipeline_filtered_peaks.tsv"
-#summary <- paste0(filtered_peaks, "_summary.txt")
-# big_table_file <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_big_table.tsv"
-# library <- "bulk" #sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50
-# plots_path <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_filtering_plots.pdf"
-# filtered_peaks  <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_filtered_peaks.tsv"
-#transduction_bed_file  <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_custom_transduction.bed"
-# summary <- "/lab-share/Gene-Lee-ANR-e2/shayna/data/carlos_newpipeline/sgL1DMSO_50/analysis/newpipeline_sgL1DMSO_50_summary.txt"
-
-cannonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
-big_table <- read.table(big_table_file,sep="\t")
-colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","custompeakname","nearest_peak","SegDups","max_distance")
+# Read input and define columns
+canonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
+big_table <- read.table(big_table_file, sep="\t")
+colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp" ,"max_usp_diff", "median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 #colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","s3p","s5p","h5p","h3p","chimera","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","bamreads","peakreads","usp","RPM","custompeakname","nearest_peak","SegDups","max_distance","chrgts","startgts","endgts","chrgts2","startgts2","sam1","sam2","sam3","sam4","sam5","sam6","something","something2","something3","level","number","overlap")
 
-big_table$gmotif_percent = big_table$gmotif / big_table$reads
-big_table$map_to_source = lapply(strsplit(paste(big_table$s3p, big_table$h3p, sep=","),","), unique)
-big_table$map_to_target = lapply(strsplit(paste(big_table$s5p, big_table$h5p, sep=","),","), unique)
+big_table$gmotif_percent <- big_table$gmotif / big_table$reads
+# big_table$map_to_source = lapply(strsplit(paste(big_table$s3p, big_table$h3p, sep=","),","), unique)
+# big_table$map_to_target = lapply(strsplit(paste(big_table$s5p, big_table$h5p, sep=","),","), unique)
 big_table <- merge(big_table,big_table[,c("RPM","peak")],by.x="nearest_peak",by.y="peak",suffixes = c("","_nearest"),all.x=TRUE)
 big_table$nearest_RPM_ratio <- big_table$RPM / big_table$RPM_nearest
 big_table$nearest_RPM_ratio[is.na(big_table$nearest_RPM_ratio)] <- 1
@@ -72,24 +53,11 @@ big_table$polymer_annotation <- FALSE
 big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
 big_table$RPM_log <- log(big_table$RPM)
 
+if (error_prone != "-NA-") { 
+  big_table$error_prone <- FALSE # add optional column
+}
 
 ####
-library(statcomp)
-big_table$permutation_entropy <- NA 
-for ( i in 1:nrow(big_table)) {
-  #print(i)
-  big_table$permutation_entropy[i] <- permutation_entropy(as.numeric(unlist(big_table$peak_shape[i])))
-}
-# #perm_ent<-
-#   ggplot(big_table[!is.na(big_table$permutation_entropy),], aes(x=permutation_entropy))+
-#   geom_histogram() #+
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Perm entropy") + 
-#   ylab("Peak Count") + 
-#   xlab("Non-NA Permutation Entropy ")
-
 
 # 
 # library(pdc)
@@ -148,7 +116,6 @@ for ( i in 1:nrow(big_table)) {
 # # 
 
 
-
 big_table$FP <- FALSE
 
 big_table$KR <- FALSE
@@ -158,7 +125,19 @@ big_table$Off_target_amplification <- FALSE
 big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$repeatmasker) ) & !(big_table$KR) ] <- TRUE
 
 big_table$KNR <- FALSE
-big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa)) & !(big_table$KR | big_table$Off_target_amplification | big_table$FP)  ] <- TRUE
+big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
+
+# If benchmarking, artifically remove KNR labels from peaks in truth set
+if (truth_set != "-NA-") {
+  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
+  true_bed <- read_tsv(truth_set, col_names=c("chrm", "start", "end", "name", "score", "strand"), col_types="ciicdc")
+
+  true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
+  true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4", "V10")]
+  colnames(true_peak_list) <- c("peak", "true_insertion_ID")
+
+  big_table$KNR[big_table$peak %in% true_peak_list$peak] <- FALSE 
+}
 
 big_table$UNK <- FALSE
 big_table$SOM_clonal <- FALSE
@@ -173,10 +152,9 @@ big_table$classification[big_table$KR] <- "KR"
 #big_table$classification[big_table$SOM_private] <- "Private_Somatic"
 big_table$classification[big_table$Off_target_amplification] <- "Off_target"
 
+#### Plotting ####
 
-####Plotting ####
-
-filter_chrm <- ggplot(big_table, aes(x=(chrm %in% cannonical_chrs),group=classification , color=classification, fill=classification)) +
+filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs),group=classification , color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
   scale_color_nejm()+
@@ -278,16 +256,21 @@ filter_segdup <-ggplot(big_table, aes(x = (SegDups != '.'), group=classification
 
 #### Printing number of each filter ####
 summary_file <- file(summary, open='a')
-cat(paste0("\n\n\n#############################Filtering results ",Sys.time(),"####################"),file=summary_file,sep="")
-big_table$filter_reason <- NA #big_table$filter_reason[] <- 
-#Filtering cat("Hello",file="outfile.txt",sep="\n")cat("Hello",file="outfile.txt",sep="\n")
-print("#############Filtering#################")
-cat(paste0("Total peaks : " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
+cat(paste0("\n#################### Filtering results ",Sys.time(),"####################\n"),file=summary_file,sep="")
+big_table$filter_reason <- "-NA-"  
+cat(paste0("Total peaks: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 
-#Filter peaks in non-cannonical chromosomes
-big_table$filter_reason[!(big_table$chrm %in% cannonical_chrs) & !(big_table$FP)] <- "chrms"
-big_table$FP[!(big_table$chrm %in% cannonical_chrs) & !(big_table$FP)] <- TRUE
-cat(paste0("Canonical chroms: " , nrow(big_table[big_table$filter_reason == "chrms",] )),file=summary_file,sep="\n")
+# Annotate candidate peaks with G-motif and SegDup
+cat("\nANNOTATIONS",file=summary_file,sep="\n")
+cat(paste0("Peaks with Gmotif percent less than 50% and not KR or KNR overlapping: ", 
+ nrow(big_table[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR),])),file=summary_file,sep="\n")
+cat(paste0("Peaks overlapping SegDups: ", nrow(big_table[big_table$SegDups != '.',])),file=summary_file,sep="\n")
+
+#Filter peaks in non-canonical chromosomes
+cat("\nFILTERS",file=summary_file,sep="\n")
+big_table$filter_reason[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- "chrms"
+big_table$FP[!(big_table$chrm %in% canonical_chrs) & !(big_table$FP)] <- TRUE
+cat(paste0("Non-canonical chroms: " , nrow(big_table[big_table$filter_reason == "chrms",] )),file=summary_file,sep="\n")
 
 #In PTA libraries, remove smaller peaks nearby larger ones that are due to incorrect amplification during PTA 
 if (library != "bulk"){
@@ -303,11 +286,6 @@ if (library != "bulk") {
   cat(paste0("Number of templates less than 3: " , nrow(big_table[big_table$filter_reason == "num_templates",] )),file=summary_file,sep="\n")
 }
 
-#Remove candidate novel peaks that do not carry the G-motif
-big_table$filter_reason[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- "gmotif"
-big_table$FP[big_table$gmotif_percent < 0.5 & !(big_table$KNR | big_table$KR) & !(big_table$FP)] <- TRUE
-cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(big_table[big_table$filter_reason == "gmotif",] )),file=summary_file,sep="\n")
-
 
 # if(library != "single"){
 #   big_table$filter_reason[(big_table$RPM <= 5 & (big_table$KR | big_table$KNR) & !(big_table$FP)) ] <-"RPM" 
@@ -318,6 +296,7 @@ cat(paste0("Gmotif percent less than 80% and not KR or KNR overlaping: " , nrow(
 #   big_table$FP[(big_table$RPM <= 5 & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP)) ]<- TRUE
 #   cat(paste0("RPM less than or equal 5 for KR overlap and less than 2 for KNR overlap and less than or equal 10 all other: " , nrow(big_table[big_table$filter_reason == "RPM" ,] )),file=summary_file,sep="\n")
 # }
+
 
 if(library != "bulk"){
   big_table$filter_reason[big_table$template_ratio <= 0.25 & !(big_table$FP)] <- "template_ratio"
@@ -333,31 +312,46 @@ big_table$filter_reason[((big_table$misaligned == "misalignment") & !(big_table$
 big_table$FP[((big_table$misaligned == "misalignment") & !(big_table$FP) )]<- TRUE
 cat(paste0("Misaligned: " , nrow(big_table[big_table$filter_reason == "misaligned_reads",] )),file=summary_file,sep="\n")
 
- big_table$filter_reason[(big_table$polyA_percent == 0) & !(big_table$FP)] <- "polyApercent"
- big_table$FP[(big_table$polyA_percent == 0) & !(big_table$FP)]<- TRUE
- cat(paste0("No polyA containing reads (junction spanning): " , nrow(big_table[big_table$filter_reason == "polyApercent",] )),file=summary_file,sep="\n")
+big_table$filter_reason[(big_table$polyA_percent == 0) & !(big_table$FP)] <- "polyApercent"
+big_table$FP[(big_table$polyA_percent == 0) & !(big_table$FP)]<- TRUE
+cat(paste0("No polyA containing reads (junction spanning): " , nrow(big_table[big_table$filter_reason == "polyApercent",] )),file=summary_file,sep="\n")
 
 big_table$filter_reason[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- "ALR/Alpha"
 big_table$FP[grepl("ALR/Alpha",big_table$repeatmasker) & !(big_table$FP)] <- TRUE
 cat(paste0("ALR/Alpha Satellite overlapping: " , nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),file=summary_file,sep="\n")
 
-
-big_table$filter_reason[(big_table$SegDups != ".") & !(big_table$FP)] <- "SegDup"
-big_table$FP[(big_table$SegDups != ".") & !(big_table$FP)] <- TRUE
-cat(paste0("SegDups: " , nrow(big_table[big_table$filter_reason == "SegDup",] )),file=summary_file,sep="\n")
-
-
 if(library == "bulk"){
-  big_table$filter_reason[(big_table$RPM <= 1 ) ] <-"RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
-  big_table$FP[(big_table$RPM <= 1)  ]<- TRUE  #| (big_table$RPM <= 1 & !(big_table$KR | big_table$KNR)& !(big_table$FP))
+  big_table$filter_reason[(big_table$RPM <= 1) & !(big_table$FP)] <- "RPM" #& (big_table$KR | big_table$KNR) & !(big_table$FP))
+  big_table$FP[(big_table$RPM <= 1) & !(big_table$FP)] <- TRUE  #| (big_table$RPM <= 1 & !(big_table$KR | big_table$KNR)& !(big_table$FP))
   cat(paste0("RPM less than or equal 1: " , nrow(big_table[(big_table$filter_reason == "RPM" ) ,] )),file=summary_file,sep="\n")
 }else {
-  big_table$filter_reason[(big_table$RPM <= 5 ) ] <-"RPM" #<- "RPM" & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP))
-  big_table$FP[(big_table$RPM <= 5 )]<- TRUE
+  big_table$filter_reason[(big_table$RPM <= 5) ] <-"RPM" # <- "RPM" & (big_table$KR ) & !(big_table$FP)) | (big_table$RPM <= 2 & (big_table$KNR) & !(big_table$FP)) | (big_table$RPM <= 10 & !(big_table$KR | big_table$KNR) & !(big_table$FP))
+  big_table$FP[(big_table$RPM <= 5)]<- TRUE
   cat(paste0("RPM less than or equal 5: " , nrow(big_table[big_table$filter_reason == "RPM" ,] )),file=summary_file,sep="\n")
 }
 
+# Filter out peaks in error_prone regions if regions are provided
+if (error_prone != "-NA-") {
+  big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
+  error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm", "start", "end"), col_types="cii")
+    
+  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
+    
+  if (truth_set != "-NA-") {
+    error_peak_list <- error_peak_list[!error_peak_list %in% true_peak_list$peak]
+  }
 
+  big_table$error_prone[big_table$peak %in% error_peak_list] <- TRUE
+  big_table$filter_reason[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- "error-prone"
+  big_table$FP[(big_table$peak %in% error_peak_list) & !(big_table$FP)] <- TRUE
+  cat(paste0("Overlapping error-prone region: ", nrow(big_table[big_table$filter_reason == "error-prone",])), file=summary_file, sep="\n")
+}
+
+# Add truth set info to table if provided
+if (truth_set != "-NA-") {
+  big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE)
+  big_table[is.na(big_table)] <- "-NA-"
+}
 
 # #testing clustering of each group after all other filters have been applied 
 # library(mixtools)
@@ -387,28 +381,33 @@ if(library == "bulk"){
 # # # 
 
 
-
 cat(paste0("Total peaks after filtering: " , nrow(big_table[!big_table$FP,])),file=summary_file,sep="\n")
 big_table$classification[big_table$FP] <- "FP"
-if(library != "bulk"){
+if(library == "single"){
   big_table$classification[big_table$classification == "Candidate"] <- "UNK"
-}else {#if(library == "bulk"){
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5 ] <- "UNK"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+}else {  
+  if(library == "bulk"){  
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
+    big_table$classification[big_table$classification == "SOM_clonal" & big_table$RPM >= 5 ] <- "UNK" # UNK must have multiple templates and RPM >= 5
+  }else{
+    big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5 ] <- "UNK"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1 ] <- "SOM_clonal"
+    big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1 ] <- "SOM_private"
+  }
 }
 # }else{ #microbulk case 
 #   big_table$classification[big_table$classification == "Candidate" & big_table$RPM ] 
 # }
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif > 0.5)  ] <- "KR_gmotif_containg"
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif < 0.5)  ] <- "KR_gmotif_missing"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif > 0.5)  ] <- "KNR_gmotif_containg"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif < 0.5)  ] <- "KNR_gmotif_missing"
+big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent >= 0.5)  ] <- "KR_gmotif_containing"
+big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent < 0.5)  ] <- "KR_gmotif_missing"
+big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent >= 0.5)  ] <- "KNR_gmotif_containing"
+big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent < 0.5)  ] <- "KNR_gmotif_missing"
 
 
 big_table$classification <- as.factor(big_table$classification)
 
-cat(paste0("Total KR: " , nrow(big_table[grepl("KR",big_table$classification),])),file=summary_file,sep="\n")
+cat(paste0("\nTotal KR: " , nrow(big_table[grepl("KR",big_table$classification),])),file=summary_file,sep="\n")
 cat(paste0("Total KNR: " , nrow(big_table[grepl("KNR",big_table$classification),])),file=summary_file,sep="\n")
 cat(paste0("Total UNK: " , nrow(big_table[big_table$classification == "UNK",])),file=summary_file,sep="\n")
 if(library == "bulk"){
@@ -418,7 +417,6 @@ if(library == "bulk"){
 }
 cat(paste0("Total Off target: " , nrow(big_table[big_table$classification == "Off_target",])),file=summary_file,sep="\n")
 cat(paste0("Total FP: " , nrow(big_table[big_table$classification == "FP",])),file=summary_file,sep="\n")
-
 
 
 
@@ -440,7 +438,8 @@ filter_reasons_KR <- ggplot(big_table[big_table$KR,], aes(x=filter_reason, group
   ggtitle("Distribution of Filtering KR Peaks") + 
   ylab("Peak Count") + 
   xlab("Filter")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
 filter_reasons_KNR <- ggplot(big_table[big_table$KNR,], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
@@ -470,95 +469,101 @@ filter_reasons_KR
 filter_reasons_KNR
 dev.off()
 
+# 
+# #Transduction support
+# transduction_table <- big_table[!(big_table$classification %in% c("FP","Off_target")) ,c("peak","custompeakname","map_to_source","map_to_target","classification")]
+# transduction_table$transduction_support <- NA
+# for (row in (1:nrow(transduction_table))){
+#   #print("##################################################")
+#   source_list <- unlist(transduction_table$map_to_source[row]) #[unlist(transduction_table$map_to_source[row]) != c("", transduction_table$custompeakname[row])]
+#   source_list <- source_list[!(source_list %in%  c("", transduction_table$custompeakname[row])) ]
+#   #transduction_table$map_to_target[row] <- unlist(transduction_table$map_to_target[row])[unlist(transduction_table$map_to_target[row]) != c("", transduction_table$custompeakname[row])]
+#   if (length(source_list) > 0){
+#     #print(source_list)
+#     for (custompeak in source_list){
+#       #print(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])
+#       if (transduction_table$custompeakname[row] %in% unlist(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])){
+#         if (!is.na(transduction_table$transduction_support[row])){
+#           transduction_table$transduction_support[row] <- paste(transduction_table$transduction_support[row], custompeak, sep=", ")
+#         }else{
+#           transduction_table$transduction_support[row] <- custompeak
+#         }
+#       }
+#     }
+#   }
+# }
+# transduction_table <- transduction_table[!is.na(transduction_table$transduction_support) & !grepl(",",transduction_table$transduction_support),c("peak","transduction_support")]
+# transduction_bed <- read.table(transduction_bed_file, sep="\t",header=FALSE,col.names = c("chr","start","end","custompeakname","elements"))
+# transduction_table <- merge(transduction_table,transduction_bed,by.x="transduction_support",by.y="custompeakname")
+# colnames(transduction_table) <- c("transduction_support","peak","source_chr","source_start","source_end","source_elements")
+# 
+# 
 
-#Transduction support
-transduction_table <- big_table[!(big_table$classification %in% c("FP","Off_target")) ,c("peak","custompeakname","map_to_source","map_to_target","classification")]
-transduction_table$transduction_support <- NA
-for (row in (1:nrow(transduction_table))){
-  #print("##################################################")
-  source_list <- unlist(transduction_table$map_to_source[row]) #[unlist(transduction_table$map_to_source[row]) != c("", transduction_table$custompeakname[row])]
-  source_list <- source_list[!(source_list %in%  c("", transduction_table$custompeakname[row])) ]
-  #transduction_table$map_to_target[row] <- unlist(transduction_table$map_to_target[row])[unlist(transduction_table$map_to_target[row]) != c("", transduction_table$custompeakname[row])]
-  if (length(source_list) > 0){
-    #print(source_list)
-    for (custompeak in source_list){
-      #print(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])
-      if (transduction_table$custompeakname[row] %in% unlist(transduction_table$map_to_target[transduction_table$custompeakname == custompeak])){
-        if (!is.na(transduction_table$transduction_support[row])){
-          transduction_table$transduction_support[row] <- paste(transduction_table$transduction_support[row], custompeak, sep=", ")
-        }else{
-          transduction_table$transduction_support[row] <- custompeak
-        }
-      }
-    }
-  }
+# Filtered table
+if (truth_set != "-NA-") {
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","true_insertion_ID")]
+} else {
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
 }
-transduction_table <- transduction_table[!is.na(transduction_table$transduction_support) & !grepl(",",transduction_table$transduction_support),c("peak","transduction_support")]
-transduction_bed <- read.table(transduction_bed_file, sep="\t",header=FALSE,col.names = c("chr","start","end","custompeakname","elements"))
-transduction_table <- merge(transduction_table,transduction_bed,by.x="transduction_support",by.y="custompeakname")
-colnames(transduction_table) <- c("transduction_support","peak","source_chr","source_start","source_end","source_elements")
 
-
-
-#Filtered table
-filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","custompeakname")]
-filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
-
-filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_chr[grepl("KR",filtered_table$classification )] <- NA 
-filtered_table$source_start[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_end[grepl("KR",filtered_table$classification)] <- NA 
-filtered_table$source_elements[grepl("KR",filtered_table$classification)] <- NA 
+#filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
+# 
+# filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_chr[grepl("KR",filtered_table$classification )] <- NA
+# filtered_table$source_start[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_end[grepl("KR",filtered_table$classification)] <- NA
+# filtered_table$source_elements[grepl("KR",filtered_table$classification)] <- NA
 
 write.table(filtered_table,filtered_peaks,sep="\t",row.names=FALSE,col.names=TRUE,quote=FALSE,na = "-NA-")
 write.table(big_table[,lapply(big_table, class) != "list"] , big_table_filter_annotation_file ,sep="\t",row.names=FALSE,col.names=TRUE,quote=FALSE,na = "-NA-")
 
+# 
+# 
+# 
+# circos_table <- filtered_table[!is.na(filtered_table$source_chr), c("chrm","start","end","source_chr","source_start","source_end","classification")]
+# #circos.initializeWithIdeogram(species = "hg38")
+# colnames(circos_table) <- c("chrom1","start1","end1","chrom2","start2","end2","classification")
+# circos_table_polymorphic <- circos_table[grepl("KR|KNR",circos_table$classification),]
+# circos_table_novel <- circos_table[circos_table$classification %in% c("UNK","SOM"),]
+# 
+# png(paste0(plots_path,"_circos_plot_ref_polymorphic.png"), width = 1000, height = 1000)
+# par(mar = c(1, 1, 4, 1))
+# circos.initializeWithIdeogram(species = "hg38")
+# 
+# for (i in 1:nrow(circos_table_polymorphic)) {
+#   circos.link(
+#     sector.index1 = circos_table_polymorphic$chrom1[i],
+#     point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
+#     sector.index2 = circos_table_polymorphic$chrom2[i],
+#     point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
+#     col = "blue",
+#     directional = -1
+#   )
+# }
+# title("Reference and Polymorphic Insertions with Transductions", cex.main = 1.5)
+# 
+# circos.clear()
+# #circos.clear()
+# dev.off()
+# png(paste0(plots_path,"_circos_plot_novel.png"), width = 1000, height = 1000)
+# par(mar = c(1, 1, 4, 1))
+# 
+# circos.initializeWithIdeogram(species = "hg38")
+# 
+# for (i in 1:nrow(circos_table_novel)) {
+#   circos.link(
+#     sector.index1 = circos_table_novel$chrom1[i],
+#     point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
+#     sector.index2 = circos_table_novel$chrom2[i],
+#     point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
+#     col = "red",
+#     directional = -1
+#   )
+# }
+# title("Novel Insertions with Transductions", cex.main = 1.5)
+# 
+# circos.clear()
+# #circos.clear()
+# #dev.off()
+# dev.off()
 
-library(circlize)
-
-circos_table <- filtered_table[!is.na(filtered_table$source_chr), c("chrm","start","end","source_chr","source_start","source_end","classification")]
-#circos.initializeWithIdeogram(species = "hg38")
-colnames(circos_table) <- c("chrom1","start1","end1","chrom2","start2","end2","classification")
-circos_table_polymorphic <- circos_table[grepl("KR|KNR",circos_table$classification),]
-circos_table_novel <- circos_table[circos_table$classification %in% c("UNK","SOM"),]
-
-png(paste0(plots_path,"_circos_plot_ref_polymorphic.png"), width = 1000, height = 1000)
-par(mar = c(1, 1, 4, 1))
-circos.initializeWithIdeogram(species = "hg38")
-
-for (i in 1:nrow(circos_table_polymorphic)) {
-  circos.link(
-    sector.index1 = circos_table_polymorphic$chrom1[i],
-    point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
-    sector.index2 = circos_table_polymorphic$chrom2[i],
-    point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
-    col = "blue",
-    directional = -1
-  )
-}
-title("Reference and Polymorphic Insertions with Transductions", cex.main = 1.5)
-
-circos.clear()
-#circos.clear()
-dev.off()
-png(paste0(plots_path,"_circos_plot_novel.png"), width = 1000, height = 1000)
-par(mar = c(1, 1, 4, 1))
-
-circos.initializeWithIdeogram(species = "hg38")
-
-for (i in 1:nrow(circos_table_novel)) {
-  circos.link(
-    sector.index1 = circos_table_novel$chrom1[i],
-    point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
-    sector.index2 = circos_table_novel$chrom2[i],
-    point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
-    col = "red",
-    directional = -1
-  )
-}
-title("Novel Insertions with Transductions", cex.main = 1.5)
-
-circos.clear()
-#circos.clear()
-#dev.off()
-dev.off()

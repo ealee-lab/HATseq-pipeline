@@ -1,0 +1,19 @@
+name: plotR
+channels:
+  - conda-forge
+  - bioconda
+  - r
+  - defaults
+dependencies:
+  - bedtools=2.30.0
+  - r-base
+  - r-upsetr
+  - r-stringr
+  - r-reshape
+  - r-tidyverse
+  - r-rcolorbrewer
+  - r-ggpubr
+  - r-ggsci
+  - r-circlize
+  - r-bedtoolsr
+  

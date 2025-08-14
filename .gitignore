@@ -1,0 +1,10 @@
+/*
+*.err
+*.out
+*__pycache__
+!config
+!scripts
+!setup
+!workflow
+!README.md
+!.gitignore
