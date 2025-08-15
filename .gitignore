@@ -2,7 +2,8 @@
 *.err
 *.out
 *__pycache__
-!config
+!config/*.yml
+!config/*.tsv
 !scripts
 !setup
 !workflow

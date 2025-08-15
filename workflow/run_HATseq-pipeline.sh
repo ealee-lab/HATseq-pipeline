@@ -19,13 +19,21 @@ config=$3
 outdir=$4
 tmpdir=$5
 
-# Activate environment 
+# Create enviornment if needed and activate 
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
-conda activate HATseq
+
+if conda env list | grep -E "^HATseq\b"; then
+    echo "here"
+    conda activate HATseq
+else
+    conda env create --file envs/conda.yml --yes
+    conda activate HATseq
+fi
 
 export TMPDIR=${tmpdir} # used as tmpdir by snakemake
 
+# Run the pipeline
 snakemake --unlock -s ${snakefile} \
     --profile ${profile} \
     --configfile ${config} \

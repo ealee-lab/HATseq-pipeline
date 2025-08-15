@@ -127,7 +127,7 @@ big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$r
 big_table$KNR <- FALSE
 big_table$KNR[(grepl("LINE1", big_table$gnomad) | grepl("LINE1", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("LINE1",big_table$xTea)) & !(big_table$KR | big_table$FP)  ] <- TRUE
 
-# If benchmarking, artifically remove KNR labels from peaks in truth set
+# Artifically remove KNR labels from peaks in truth set if benchmarking
 if (truth_set != "-NA-") {
   big_bed <- big_table[, c("chrm", "start", "end", "peak", "RPM", "strand")]
   true_bed <- read_tsv(truth_set, col_names=c("chrm", "start", "end", "name", "score", "strand"), col_types="ciicdc")

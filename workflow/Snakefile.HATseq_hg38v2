@@ -67,7 +67,7 @@ rule qc:
 	threads: 4
 	resources:
 		runtime = 60,
-		mem_mb = lambda wildcards, input: input.size_mb,
+		mem_mb = lambda wildcards, input: max(input.size_mb, 8000)
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
 			"-i {input.raw_fastq1} -I {input.raw_fastq2} "
@@ -113,7 +113,7 @@ rule preprocessing:
 	threads: 4
 	resources:
 		runtime = 60,
-		mem_mb = lambda wildcards, input: input.size_mb,
+		mem_mb = lambda wildcards, input: max(input.size_mb, 8000)
 	shell:
 		"set -x \n"
 
@@ -187,12 +187,12 @@ rule alignment:
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
 	output:
-		bwa_bam = "{sample}/{sample}_bwa.bam",
+		bwa_bam = temp("{sample}/{sample}_bwa.bam"),
 		bwa_sorted_bam = "{sample}/{sample}_bwa_sorted.bam", 
 		bwa_sorted_index = "{sample}/{sample}_bwa_sorted.bam.bai",
-		trim_bwa_bam = "{sample}/{sample}_trim_bwa.bam",
-		trim_uniq_bam = "{sample}/{sample}_trim_uniq.bam", # polyT-trimmed reads
-		trim_uniq_sorted_bam = "{sample}/{sample}_trim_uniq_sorted.bam",
+		trim_bwa_bam = temp("{sample}/{sample}_trim_bwa.bam"),
+		trim_uniq_bam = temp("{sample}/{sample}_trim_uniq.bam"), 
+		trim_uniq_sorted_bam = "{sample}/{sample}_trim_uniq_sorted.bam", # polyT-trimmed reads
 		trim_uniq_sorted_index = "{sample}/{sample}_trim_uniq_sorted.bam.bai",
 		trim_peaks = "{sample}/{sample}_trim_peaks.bed",
 		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
@@ -201,8 +201,8 @@ rule alignment:
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8 
 	resources:
-		runtime = 60,
-		mem_mb = lambda wildcards, input: 4 * input.size_mb,
+		runtime = 80,
+		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 16000)
 	shell:
 		# Map mappable parts of R1 to reference genome
 		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
@@ -259,7 +259,7 @@ rule gmotif:
 	output:
 		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt"
 	resources:
-		runtime = 10,
+		runtime = 15,
 		mem_mb = lambda wildcards, input: 2.5 * input.size_mb,
 	shell:
 		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
@@ -280,7 +280,7 @@ rule Ntag:
 		adapter = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
 	threads: 2 
 	resources:
-		runtime = 15,
+		runtime = 20,
 		mem_mb = lambda wildcards, input: 1.5 * input.size_mb,
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - "
@@ -586,7 +586,7 @@ rule count_templates:
 		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
 		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt"
 	resources:
-		runtime = 15,
+		runtime = 10,
 		mem_mb = lambda wildcards, input: 6 * input.size_mb,
 	run:
 		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
@@ -787,7 +787,7 @@ rule create_big_table:
 		big_table = "{sample}/{sample}_big_table.tsv"
 	resources:
 		runtime = 20,
-		mem_mb = lambda wildcards, input: 4 * input.size_mb,
+		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 2000)
 	run:
 		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
@@ -882,7 +882,7 @@ rule transduction_big_table:
 		transduction_big_table = "{sample}/{sample}_transduction_big_table.tsv"
 	resources:
 		runtime = 20,
-		mem_mb = lambda wildcards, input: 3 * input.size_mb,
+		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 2000)
 	run:
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed, sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])

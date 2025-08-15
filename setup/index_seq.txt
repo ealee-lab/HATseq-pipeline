@@ -1,4 +1,0 @@
-1 ATCG
-2 CCAA
-3 GATC
-4 TGGT
