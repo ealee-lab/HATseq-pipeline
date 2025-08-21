@@ -13,18 +13,17 @@
 #SBATCH -p your_partition
 #SBATCH -A your_account 
 
-snakefile=$1 
-profile=$2
-config=$3
-outdir=$4
-tmpdir=$5
+snakefile=$(realpath $1) 
+profile=$(realpath $2)
+config=$(realpath $3)
+outdir=$(realpath $4)
+tmpdir=$(realpath $5)
 
 # Create enviornment if needed and activate 
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
 
 if conda env list | grep -E "^HATseq\b"; then
-    echo "here"
     conda activate HATseq
 else
     conda env create --file envs/conda.yml --yes

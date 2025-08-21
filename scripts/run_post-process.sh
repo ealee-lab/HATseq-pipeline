@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Post-process each sample by calculating statistics.
+# Post-process each sample by calculating statistics. If your resdir contains
+# samples that were not intersected with a truth set, this script will error
+# on those samples.
+# 
+# Usage: bash run_post-process.sh <resdir> <tdir>
 
 resdir=$(realpath $1) # Parent directory with pipeline results
 tdir=$(realpath $2) # Directory with truth sets
@@ -10,12 +14,12 @@ som_true="${tdir}/l1_hapmapmixture_final_v2_somatic_tier1-2.bed"
 target_true="${tdir}/l1_hapmapmixture_final_v2_target_tier1-2.bed"
 som_target_true="${tdir}/l1_hapmapmixture_final_v2_target_somatic_tier1-2.bed"
 
-for path in $(ls ${resdir}/); do
+for path in $(ls ${resdir}); do
     sample=$(basename "${path}")
     echo $sample
     
-    indir="${resdir}/${sample}/analysis"
-    outdir="${resdir}/${sample}/analysis/stats"
+    indir="${resdir}/${sample}"
+    outdir="${resdir}/${sample}/stats"
     mkdir -p "${outdir}"
     
     big_table="${indir}/${sample}_filtered_peaks.tsv"
