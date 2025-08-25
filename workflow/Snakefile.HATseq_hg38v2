@@ -12,6 +12,9 @@ import math
 import gzip 
 import statistics
 
+# Load helper functions
+include: "rules/common.smk"
+
 # Read config variables as constants
 SAMPLES = pd.read_csv(config["samples"], sep="\t", dtype=str).set_index("sample_name")
 TE_NAME = config["te_name"]
@@ -68,7 +71,7 @@ rule qc:
 		length_req = 50,
 	threads: 4
 	resources:
-		runtime = lambda wildcards, input: min(input.size_mb / 80 + 5, 60), # estimate 80M/min
+		runtime = get_short_runtime,
 		mem_mb = lambda wildcards, input: max(0.25 * input.size_mb, 2000)
 	group: "fastq"
 	shell:
@@ -117,7 +120,7 @@ rule preprocessing:
 		adapter_T = "TTTTTTTT" 
 	threads: 4
 	resources:
-		runtime = lambda wildcards, input: min(input.size_mb / 100 + 5, 90),
+		runtime = get_medium_runtime,
 		mem_mb = lambda wildcards, input: max(1.5 * input.size_mb, 2000)
 	group: "fastq"
 	shell:
@@ -209,8 +212,8 @@ rule alignment:
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8 
 	resources:
-		runtime = lambda wildcards, input: min(input.size_mb / 50 + 10, 150),
-		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 10000)
+		runtime = get_long_runtime,
+		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 12000)
 	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
