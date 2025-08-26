@@ -25,7 +25,7 @@ big_table_filter_annotation_file <- paste0(sub("_filtered_peaks.tsv$", "", filte
 # Read input and define columns
 canonical_chrs <- c("chr1", "chr2", "chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
 big_table <- read.table(big_table_file, sep="\t")
-colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","bamreads","peakreads","usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
+colnames(big_table) <- c("chrm","start","end","peak","shape","strand","reads","Ntag","polyA","gmotif","chimera","misaligned","repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa","xtea","hgsvc3","melt_lra","ont","bamreads","peakreads","usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak","SegDups","max_distance")
 
 big_table$gmotif_percent <- big_table$gmotif / big_table$reads
 big_table <- merge(big_table,big_table[, c("RPM","peak")], by.x="nearest_peak", by.y="peak", suffixes = c("","_nearest"), all.x=TRUE)
@@ -63,7 +63,15 @@ big_table$Off_target_amplification <- FALSE
 big_table$Off_target_amplification[(grepl("L1PA2|L1PA3|L1PA4|L1PA5|L1PA6|L1PA7", big_table$repeatmasker)) & !(big_table$KR)] <- TRUE
 
 big_table$KNR <- FALSE
-big_table$KNR[(grepl("<INS:ME:LINE1>", big_table$gnomad) | grepl("<INS:ME:LINE1>", big_table$i1gp) | grepl("LINE1", big_table$nyuwa) | grepl("<INS:ME:LINE1>", big_table$xTea)) & !(big_table$KR | big_table$FP)] <- TRUE
+big_table$KNR[(grepl("INS:ME:LINE1", big_table$i1kgp) | 
+               grepl("INS:ME:LINE1", big_table$gnomad) | 
+               grepl("INS:ME:LINE1", big_table$nyuwa) | 
+               grepl("INS:ME:LINE1", big_table$xtea) | 
+               grepl("LINE/L1", big_table$hgsvc3) | 
+               grepl("LINE1", big_table$melt_lra) | 
+               grepl("L1-INS", big_table$ont)) & 
+               !(big_table$KR | big_table$FP)] <- TRUE
+# big_table$KNR[(grepl("LINE/L1", big_table$hgsvc3) | grepl("LINE1", big_table$melt_lra) | grepl("L1-INS", big_table$ont)) & !(big_table$KR | big_table$FP)] <- TRUE
 
 # Artifically remove KNR labels from peaks in truth set if benchmarking
 if (truth_set != "-NA-") {
@@ -354,9 +362,9 @@ dev.off()
 
 # Filtered table
 if (truth_set != "-NA-") {
-  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea","true_insertion_ID")]
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1kgp","nyuwa","xtea","true_insertion_ID")]
 } else {
-  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1gp","nyuwa","xTea")]
+  filtered_table <- big_table[big_table$classification != "FP", c("chrm","start","end","peak","classification","strand","RPM","shape","usp","gmotif_percent","polyA_percent","repeatmasker","evrony","homopolymers","gnomad","i1kgp","nyuwa","xtea")]
 }
 
 write.table(filtered_table, filtered_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")

@@ -25,16 +25,21 @@ SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
 
 # Create reference file constants
-EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
-REPEAT_MASKER = REFERENCE_DIR + "/RepeatMasker/repeatmasker.v38.bed"
-HOMOPOLYMERS = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" #Lifted over
+EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" # Lifted over
+REPEAT_MASKER = REFERENCE_DIR + "/RepeatMasker/hg38.repeatmasker.bed"
+HOMOPOLYMERS = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" # Lifted over
+SEGDUPS = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
 HG38 = REFERENCE_DIR + "/human/hg38.genome"
 L1HS_DECOY = REFERENCE_DIR + "/L1HS_decoy_sequence.fasta"
-IKGP = REFERENCE_DIR + "/1kgp/1kgp.AF.ME.final.hg38.bed"
-GNOMAD = REFERENCE_DIR + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" 
-XTEA = REFERENCE_DIR + "/xTea/xTea-Borges-Monroy2021.accessioned.bed"
+I1KGP = REFERENCE_DIR + "/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed"
+GNOMAD = REFERENCE_DIR + "/gnomAD-SV/gnomad.v4.1.ME.sites.bed" 
+XTEA = REFERENCE_DIR + "/xTea/xTea_Borges-Monroy2021.accessioned.bed"
 NYUWA = REFERENCE_DIR + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
-SEGDUPS = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
+HGSVC3 = REFERENCE_DIR + "HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed"
+HGSVC3_MELT_LRA = REFERENCE_DIR + "HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed"
+ONT1019 = REFERENCE_DIR + "1019_ONT/1019_ONT_Schloissnig2025.bed"
+
+localrules: HATseq # do not submit target rule as separate job
 
 rule HATseq:
 	input:
@@ -50,8 +55,8 @@ rule HATseq:
 		#"{sample}/{sample}_custom_transduction.fasta",
 		"{sample}/{sample}_polyA_trimmed.txt",
 		"{sample}/{sample}_chimera_hash.txt",
-		"{sample}/{sample}_big_table.tsv",
-		"{sample}/{sample}_filtered_peaks.tsv"
+		#"{sample}/{sample}_big_table.tsv",
+		#"{sample}/{sample}_filtered_peaks.tsv"
 		],
 		sample=SAMPLES.index) 
 
@@ -71,7 +76,7 @@ rule qc:
 		length_req = 50,
 	threads: 4
 	resources:
-		runtime = get_short_runtime,
+		runtime = get_short_runtime, # lambda wildcards, input: min(input.size_mb / 75, 60),
 		mem_mb = lambda wildcards, input: max(0.25 * input.size_mb, 2000)
 	group: "fastq"
 	shell:
@@ -278,7 +283,7 @@ rule Ntag:
 		adapter = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
 	threads: 1
 	resources:
-		runtime = 20,
+		runtime = 20, # TODO: make function
 		mem_mb = lambda wildcards, input: max(1.75 * input.size_mb, 2000),
 	group: "fastq"
 	shell:
@@ -302,7 +307,7 @@ rule gmotif:
 	benchmark:
 		"benchmarks/gmotif/{sample}.tsv"
 	resources:
-		runtime = 15,
+		runtime = 12, # TODO: make function
 		mem_mb = lambda wildcards, input: max(2.5 * input.size_mb, 2000)
 	group: "fastq"
 	shell:
@@ -323,7 +328,7 @@ rule junction_spanning:
 		max_err = 0,
 		adapter_T = "TTTTTTTT" 
 	resources:
-		runtime = 10,
+		runtime = 6,
 		mem_mb = lambda wildcards, input: max(0.2 * input.size_mb, 120)
 	group: "fastq"
 	shell:
@@ -343,7 +348,7 @@ rule extract_clipping:
 	benchmark:
 		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
-		runtime = 10,
+		runtime = 6,
 		mem_mb = lambda wildcards, input: max(0.5 * input.size_mb, 100)
 	group: "bam"
 	run:
@@ -414,7 +419,7 @@ rule peak_calling:
 	benchmark:
 		"benchmarks/peak_calling/{sample}.tsv"
 	resources:
-		runtime = 10,
+		runtime = 6,
 		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 2000)
 	group: "peaks"
 	shell:
@@ -472,7 +477,7 @@ rule count_templates:
 	benchmark:
 		"benchmarks/run_count_templates/{sample}.tsv"
 	resources:
-		runtime = 10,
+		runtime = 6,
 		mem_mb = lambda wildcards, input: max(6 * input.size_mb, 2000)
 	group: "peaks"
 	run:
@@ -541,8 +546,8 @@ rule chimera:
 	benchmark:
 		"benchmarks/run_chimera/{sample}.tsv"
 	resources:
-		runtime = 2,
-		mem_mb = 100,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
 	group: "peaks"
 	run:
 		chimera_list = []
@@ -606,8 +611,8 @@ rule chimera_hash:
 	benchmark:
 		"benchmarks/run_chimera_hash/{sample}.tsv"
 	resources:
-		runtime = 2,
-		mem_mb = 100,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
 	group: "peaks"
 	run:
 		seqs = open(input.breakpoint_fa , 'r')
@@ -635,8 +640,8 @@ rule nearby_peak:
 	benchmark:
 		"benchmarks/nearby_peak/{sample}.tsv"
 	resources:
-		runtime = 2,
-		mem_mb = 100,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
 	group: "peaks"
 	shell:
 		"mergeBed -d 1000 -i {input.peaks} -c 4,5 -o collapse,collapse -delim \"=\" | "
@@ -656,8 +661,8 @@ rule segdup:
 	benchmark:
 		"benchmarks/segdup/{sample}.tsv"
 	resources:
-		runtime = 2,
-		mem_mb = 100,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
 	group: "peaks"
 	shell:
 		"bedtools intersect -wao -a {input.peaks} -b {input.segdups} | "
@@ -671,21 +676,25 @@ rule intersect_databases:
 		Evrony_KR = EVRONY_KR,
 		repeat_masker = REPEAT_MASKER,
 		homopolymers = HOMOPOLYMERS,
-		i1kgp = IKGP,
+		i1kgp = I1KGP,
 		gnomad = GNOMAD,
 		nyuwa = NYUWA,
-		xTea = XTEA	
+		xtea = XTEA,
+		hgsvc3 = HGSVC3,
+		melt_lra = HGSVC3_MELT_LRA,
+		ont = ONT1019	
 	output:
 		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed"
 	benchmark:
 		"benchmarks/intersect_databases/{sample}.tsv"
 	resources:
-		runtime = 5,
-		mem_mb = lambda wildcards, input: max(10 * input.size_mb, 2000) # memory spikes
+		runtime = 1,
+		mem_mb = lambda wildcards, input: max(10 * input.size_mb, 2000) # TODO: memory spikes, resolve if possible
 	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
-			"Repeat_masker\tEvrony_KR\tHomopolymers\tGnomad\t1000_Genomes_Project\tNyuwa\txTea' "
+			"RepeatMasker\tEvrony_KR\tHomopolymers\t
+			"1000_Genomes_Project\tgnomAD\tNyuWa\txTea\tHGSVC3\tHGSVC3-MELT-LRA\t1019_ONT' "
 			"> {output.intersect_annotated} \n"
 		"bedtools intersect -S -wao -a {input.peaks} -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.repeat_masker}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$10\";\"$11\";\"$12}}' | "
@@ -696,18 +705,27 @@ rule intersect_databases:
 			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.homopolymers}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$12}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8 -c 9 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.1kgp}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$13\";\"$14\";\"$15}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9 -c 10 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.i1kgp}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14\";\"$15\";\"$16}}' | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14\";\"$15}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10 -c 11 -o collapse | "
 			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.nyuwa}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$15\";\"$16\";\"$17}}' | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$15\";\"$16}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11 -c 12 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.xTea}) | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.xtea}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$16\";\"$17\";\"$18}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12 -c 13 -o collapse "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12 -c 13 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.hgsvc3}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$17\";\"$18}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13 -c 14 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.melt_lra}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$18\";\"$19}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14 -c 15 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.ont}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$19}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 -c 16 -o collapse | "
 			">> {output.intersect_annotated} \n"
 		
 rule create_big_table:
@@ -730,8 +748,9 @@ rule create_big_table:
 	benchmark:
 		"benchmarks/run_big_table/{sample}.tsv"
 	resources:
-		runtime = 15,
+		runtime = 15, # TODO: make function
 		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 4000)
+	group: "classify"
 	run:
 		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
@@ -765,8 +784,10 @@ rule create_big_table:
 		big_table = big_table.merge(chimeras, how="left", on="peak_name")
 		del chimera, chimeras, nonchimera, misalignment
 		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
-		big_table = big_table.merge(intersect[['peak_name', 'Repeat_masker', 'Evrony_KR', 'Homopolymers', 
-											   'Gnomad','1000_Genomes_Project', 'Nyuwa','xTea']], how="left", on="peak_name")
+		big_table = big_table.merge(intersect[['peak_name', 'RepeatMasker', 'Evrony_KR', 'Homopolymers', 
+											   '1000_Genomes_Project', 'gnomAD', 'NyuWa', 'xTea', 
+											   'HGSVC3', 'HGSVC3_MELT_LRA', '1019_ONT']], 
+											   how="left", on="peak_name")
 		del intersect  
 		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
 		usp.columns = usp.columns.str.strip("#")
@@ -807,8 +828,9 @@ rule filter_and_classify:
 	conda:
 		"envs/plotR.yml"
 	resources: 
-		runtime = 5,
+		runtime = 1,
 		mem_mb = 1000,
+	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
 			"{input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} "
