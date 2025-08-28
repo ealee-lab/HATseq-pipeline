@@ -35,9 +35,9 @@ I1KGP = REFERENCE_DIR + "/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed"
 GNOMAD = REFERENCE_DIR + "/gnomAD-SV/gnomad.v4.1.ME.sites.bed" 
 XTEA = REFERENCE_DIR + "/xTea/xTea_Borges-Monroy2021.accessioned.bed"
 NYUWA = REFERENCE_DIR + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
-HGSVC3 = REFERENCE_DIR + "HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed"
-HGSVC3_MELT_LRA = REFERENCE_DIR + "HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed"
-ONT1019 = REFERENCE_DIR + "1019_ONT/1019_ONT_Schloissnig2025.bed"
+HGSVC3 = REFERENCE_DIR + "/HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed"
+HGSVC3_MELT_LRA = REFERENCE_DIR + "/HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed"
+ONT1019 = REFERENCE_DIR + "/1019_ONT/1019_ONT_Schloissnig2025.bed"
 
 localrules: HATseq # do not submit target rule as separate job
 
@@ -76,8 +76,8 @@ rule qc:
 		length_req = 50,
 	threads: 4
 	resources:
-		runtime = get_short_runtime, # lambda wildcards, input: min(input.size_mb / 75, 60),
-		mem_mb = lambda wildcards, input: max(0.25 * input.size_mb, 2000)
+		runtime = get_qc_runtime,
+		mem_mb = 2000
 	group: "fastq"
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
@@ -125,8 +125,8 @@ rule preprocessing:
 		adapter_T = "TTTTTTTT" 
 	threads: 4
 	resources:
-		runtime = get_medium_runtime,
-		mem_mb = lambda wildcards, input: max(1.5 * input.size_mb, 2000)
+		runtime = get_preprocessing_runtime,
+		mem_mb = 2400
 	group: "fastq"
 	shell:
 		"set -x \n"
@@ -217,8 +217,8 @@ rule alignment:
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8 
 	resources:
-		runtime = get_long_runtime,
-		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 12000)
+		runtime = get_alignment_runtime,
+		mem_mb = 12000
 	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
@@ -348,7 +348,7 @@ rule extract_clipping:
 	benchmark:
 		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
-		runtime = 6,
+		runtime = 6, # TODO: make function
 		mem_mb = lambda wildcards, input: max(0.5 * input.size_mb, 100)
 	group: "bam"
 	run:
@@ -693,7 +693,7 @@ rule intersect_databases:
 	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
-			"RepeatMasker\tEvrony_KR\tHomopolymers\t
+			"RepeatMasker\tEvrony_KR\tHomopolymers\t"
 			"1000_Genomes_Project\tgnomAD\tNyuWa\txTea\tHGSVC3\tHGSVC3-MELT-LRA\t1019_ONT' "
 			"> {output.intersect_annotated} \n"
 		"bedtools intersect -S -wao -a {input.peaks} -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.repeat_masker}) | "
@@ -705,7 +705,7 @@ rule intersect_databases:
 			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.homopolymers}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$12}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8 -c 9 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.1kgp}) | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.i1kgp}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$13\";\"$14\";\"$15}}' | "
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9 -c 10 -o collapse | "
 			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | "
