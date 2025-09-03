@@ -55,8 +55,8 @@ rule HATseq:
 		#"{sample}/{sample}_custom_transduction.fasta",
 		"{sample}/{sample}_polyA_trimmed.txt",
 		"{sample}/{sample}_chimera_hash.txt",
-		#"{sample}/{sample}_big_table.tsv",
-		#"{sample}/{sample}_filtered_peaks.tsv"
+		"{sample}/{sample}_big_table.tsv",
+		"{sample}/{sample}_filtered_peaks.tsv"
 		],
 		sample=SAMPLES.index) 
 
@@ -77,7 +77,7 @@ rule qc:
 	threads: 4
 	resources:
 		runtime = get_qc_runtime,
-		mem_mb = 2000
+		mem_mb = get_qc_mem_mb
 	group: "fastq"
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
@@ -126,7 +126,7 @@ rule preprocessing:
 	threads: 4
 	resources:
 		runtime = get_preprocessing_runtime,
-		mem_mb = 2400
+		mem_mb = get_preprocessing_mem_mb
 	group: "fastq"
 	shell:
 		"set -x \n"
@@ -218,7 +218,7 @@ rule alignment:
 	threads: 8 
 	resources:
 		runtime = get_alignment_runtime,
-		mem_mb = 12000
+		mem_mb = get_alignment_mem_mb
 	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
@@ -284,7 +284,7 @@ rule Ntag:
 	threads: 1
 	resources:
 		runtime = 20, # TODO: make function
-		mem_mb = lambda wildcards, input: max(1.75 * input.size_mb, 2000),
+		mem_mb = get_Ntag_mem_mb
 	group: "fastq"
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - "
@@ -308,7 +308,7 @@ rule gmotif:
 		"benchmarks/gmotif/{sample}.tsv"
 	resources:
 		runtime = 12, # TODO: make function
-		mem_mb = lambda wildcards, input: max(2.5 * input.size_mb, 2000)
+		mem_mb = get_gmotif_mem_mb
 	group: "fastq"
 	shell:
 		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
@@ -329,7 +329,7 @@ rule junction_spanning:
 		adapter_T = "TTTTTTTT" 
 	resources:
 		runtime = 6,
-		mem_mb = lambda wildcards, input: max(0.2 * input.size_mb, 120)
+		mem_mb = get_junction_spanning_mem_mb
 	group: "fastq"
 	shell:
 		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
@@ -349,7 +349,7 @@ rule extract_clipping:
 		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
 		runtime = 6, # TODO: make function
-		mem_mb = lambda wildcards, input: max(0.5 * input.size_mb, 100)
+		mem_mb = get_extract_clipping_mem_mb
 	group: "bam"
 	run:
 		ofasta5p=gzip.open(output.softclip5p_fasta, 'wt')
@@ -689,7 +689,7 @@ rule intersect_databases:
 		"benchmarks/intersect_databases/{sample}.tsv"
 	resources:
 		runtime = 1,
-		mem_mb = lambda wildcards, input: max(10 * input.size_mb, 2000) # TODO: memory spikes, resolve if possible
+		mem_mb = 4000 # TODO: memory spikes, resolve if possible
 	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
@@ -725,7 +725,7 @@ rule intersect_databases:
 			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14 -c 15 -o collapse | "
 			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.ont}) | "
 			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$19}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 -c 16 -o collapse | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 -c 16 -o collapse "
 			">> {output.intersect_annotated} \n"
 		
 rule create_big_table:
@@ -786,7 +786,7 @@ rule create_big_table:
 		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
 		big_table = big_table.merge(intersect[['peak_name', 'RepeatMasker', 'Evrony_KR', 'Homopolymers', 
 											   '1000_Genomes_Project', 'gnomAD', 'NyuWa', 'xTea', 
-											   'HGSVC3', 'HGSVC3_MELT_LRA', '1019_ONT']], 
+											   'HGSVC3', 'HGSVC3-MELT-LRA', '1019_ONT']], 
 											   how="left", on="peak_name")
 		del intersect  
 		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
@@ -815,7 +815,7 @@ rule filter_and_classify:
 	output:
 		filter_reasons = "{sample}/{sample}_big_table_filter_reasons.tsv",
 		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv",
-		plots = "{sample}/{sample}_filtering_plots.pdf",
+		#plots = "{sample}/{sample}_filtering_plots.pdf",
 		igv_script = "{sample}/{sample}_igv.sh",
 		summary_file = "{sample}/{sample}_summary.txt"
 	benchmark:
@@ -829,11 +829,11 @@ rule filter_and_classify:
 		"envs/plotR.yml"
 	resources: 
 		runtime = 1,
-		mem_mb = 1000,
+		mem_mb = 800,
 	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} "
+			"{input.big_table} {LIBRARY} placeholder {output.filtered_peaks} {output.summary_file} "
 			"{params.error_prone} {params.truth_set} {params.hg38} \n"
 		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
