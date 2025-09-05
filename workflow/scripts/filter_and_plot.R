@@ -56,9 +56,6 @@ big_table$polymer_annotation <- FALSE
 big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
 big_table$RPM_log <- log(big_table$RPM)
 
-# if (error-prone != "-NA-") {
-#   big_table$error-prone <- FALSE # add optional column
-# }
 
 #### Classification and Filtering ####
 summary_file <- file(summary, open='a')
@@ -92,10 +89,10 @@ if (truth_set != "-NA-") {
   true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
   true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4","V10")]
   colnames(true_peak_list) <- c("peak","true_insertion_ID")
-  true_peak_IDs = true_peak_list$true_insertion_ID
+  true_peak_IDs = true_peak_list$peak
 
   big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE) # adds true_peak_ID column
-  big_table[is.na(big_table)] <- "-NA-"
+  big_table$true_insertion_ID[is.na(big_table$true_insertion_ID)] <- "-NA-"
 }
 
 # Label KNR peaks
@@ -202,10 +199,10 @@ big_table$FP <- NULL # drop column
 cat(paste0("\nTotal KR: ", nrow(big_table[big_table$classification == "KR",])), file=summary_file, sep="\n")
 cat(paste0("Total KNR: ", nrow(big_table[big_table$classification == "KNR",])), file=summary_file, sep="\n")
 
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent >= 0.5)] <- "KR_gmotif_containing"
-big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent < 0.5)] <- "KR_gmotif_missing"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent >= 0.5)] <- "KNR_gmotif_containing"
-big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent < 0.5)] <- "KNR_gmotif_missing"
+# big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent >= 0.5)] <- "KR_gmotif_containing"
+# big_table$classification[(big_table$classification == "KR") & (big_table$gmotif_percent < 0.5)] <- "KR_gmotif_missing"
+# big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent >= 0.5)] <- "KNR_gmotif_containing"
+# big_table$classification[(big_table$classification == "KNR") & (big_table$gmotif_percent < 0.5)] <- "KNR_gmotif_missing"
 
 cat(paste0("Total Off-target: ", nrow(big_table[big_table$classification == "Off-target",])), file=summary_file, sep="\n")
 cat(paste0("Total UNK: ", nrow(big_table[big_table$classification == "UNK",])), file=summary_file, sep="\n")
@@ -216,7 +213,7 @@ if (library == "bulk") {
 cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), file=summary_file, sep="\n")
 
 
-# TODO: Update plotting to work with new order
+# TODO: Update plotting to work with new classification order
 #### Plotting (pre-filter) ####
 # filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs), group=classification, color=classification, fill=classification)) +
 #   geom_bar() +
@@ -238,7 +235,7 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 #   ylab("Peak Count") + 
 #   xlab("Peak RPM / Largest Nearby Peak RPM")
 
-# filter_templates <-ggplot(big_table, aes(x=number_templates, group=classification, color=classification, fill=classification)) +
+# filter_templates <- ggplot(big_table, aes(x=number_templates, group=classification, color=classification, fill=classification)) +
 #   geom_histogram(binwidth=3) +
 #   scale_fill_nejm() +
 #   scale_color_nejm() +
@@ -249,14 +246,14 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 #   ylab("Peak Count") + 
 #   xlab("Number of Templates")
 
-# filter_RPM<-ggplot(big_table, aes(x=RPM_log, group=classification, color=classification, fill=classification)) +
-#   geom_histogram() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of RPM") + 
-#   ylab("Peak Count") + 
-#   xlab("ln(RPM)")
+filter_RPM <- ggplot(big_table, aes(x=RPM_log, group=classification, color=classification, fill=classification)) +
+  geom_histogram() +
+  scale_fill_nejm() +
+  scale_color_nejm() +
+  facet_wrap(~classification, scales="free") +
+  ggtitle("Distribution of RPM") + 
+  ylab("Peak Count") + 
+  xlab("ln(RPM)")
 
 # filter_gmotif <-ggplot(big_table, aes(x = classification, y=gmotif_percent, group=classification, color=classification, fill=classification)) +
 #   geom_violin() +
@@ -360,11 +357,11 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 #   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
 
 # all_plots <- c(filter_chrm, filter_PTA_artifact, filter_templates, filter_RPM, filter_gmotif, filter_template_ratio, filter_chimera, filter_misalignment, filter_polyA_spanning, filter_satellite, filter_segdup)
-# pdf(plots_path)
+pdf(plots_path)
 # filter_chrm
 # filter_PTA_artifact
 # filter_templates
-# filter_RPM
+filter_RPM
 # filter_gmotif
 # filter_template_ratio
 # filter_chimera
@@ -375,7 +372,7 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 # filter_reasons
 # filter_reasons_KR
 # filter_reasons_KNR
-# dev.off()
+dev.off()
 
 # Filtered table
 filtered_cols = c("chrm","start","end","peak","classification","strand",
