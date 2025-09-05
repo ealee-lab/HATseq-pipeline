@@ -5,35 +5,6 @@ import pandas as pd
 import pybedtools
 from pybedtools import BedTool
 
-# def concat_and_merge_annotations(kr: list, knr: list):
-#     """Concatenate and merge all KR and KNR annotations, generating one dataframe
-#     for each. Annotation files should be in BED format, with KR annotations 
-#     specifically in BED6 format."""
-#     all_kr = pd.read_csv(kr[0], sep="\t", usecols=[0,1,2,3,4,5],
-#                          names=["chr","start","end","name","score","strand"])
-#     for ref in kr:
-#         kr_df = pd.read_csv(ref, sep="\t", usecols=[0,1,2,3,4,5], header=None)
-#         all_kr = pd.concat([all_kr, kr_df])
-
-#     all_knr = pd.read_csv(knr[0], sep="\t", usecols=[0,1,2], 
-#                           names=["chr","start","end"])
-#     for ann in knr:
-#         knr_df = pd.read_csv(ann, sep="\t", usecols=[0,1,2], header=None)
-#         all_knr = pd.concat([all_knr, knr_df])
-
-#     all_kr = all_kr.sort_values(by=["chr","start"])
-#     all_knr = all_knr.sort_values(by=["chr","start"])
-
-#     kr_bt = BedTool.from_dataframe(all_kr)
-#     knr_bt = BedTool.from_dataframe(all_knr)
-
-#     kr_merge_bt = kr_bt.merge(s=True, c=[4,5,6], o=["distinct","mean","distinct"])
-#     knr_merge_bt = knr_bt.merge()
-
-#     kr_merge = kr_merge_bt.to_dataframe()
-#     knr_merge = knr_merge_bt.to_dataframe()
-#     return kr_merge, knr_merge
-
 def concat_bed_by_donor(donor_tables: dict):
     """Concatenate tissue-specific UNK/SOM peaks such that each donor has a 
     dataframe with all peaks."""
@@ -54,15 +25,14 @@ def concat_bed_by_donor(donor_tables: dict):
     return donor_beds
 
 def merge_and_filter_peaks(donor_beds: list):
-    """Merge adjacent peaks for each donor. Also, only keep noise peaks
-    (peaks with RPM < 50)."""
+    """Merge peaks across tissues for each donor."""
     merge_beds = []
 
     for donor_bed in donor_beds:
         donor_bt = BedTool.from_dataframe(donor_bed)
         merge_bt = donor_bt.merge(s=True, c=[4,5,6], o=["distinct","mean","distinct"])
         merge_bed = merge_bt.to_dataframe()
-        merge_bed = merge_bed[merge_bed["score"] < 50] # count RPM < 50 as noise
+        # merge_bed = merge_bed[merge_bed["score"] < 100]
         merge_beds.append(merge_bed)
 
     return merge_beds   
@@ -79,20 +49,12 @@ def intersect_donor_peaks(merge_beds: list):
     err_regions[4] = err_regions[3] / len(merge_beds) # % of donors with peak
     return err_regions
 
-# def remove_KR_KNR_peaks(err_regions: pd.DataFrame, kr: pd.DataFrame, knr: pd.DataFrame):
-#     regions_bt = BedTool.from_dataframe(err_regions)
-#     kr_bt = BedTool.from_dataframe(kr)
-#     knr_bt = BedTool.from_dataframe(knr)
-
-#     # Intersect -v
-#     return
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="A script to generate error-prone regions.")
     parser.add_argument("donor_list", help="List of donors to generate regions from")
-    parser.add_argument("directory", help="Parent directory with pipeline outputs")
-    parser.add_argument("reference", help="Reference directory with KR/KNR annotations")
+    parser.add_argument("resdir", help="Parent directory with pipeline results")
+    parser.add_argument("outdir", help="Output directory")
     args = parser.parse_args()
 
     with open(args.donor_list, "r") as f:
@@ -101,7 +63,7 @@ if __name__ == "__main__":
     donor_tables = {}
     for donor in donors:
         tables = glob.glob(
-            f"{os.path.normpath(args.directory)}/*{donor}*/*{donor}*big_table_filter_reasons.tsv")
+            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*filtered_peaks.tsv")
         
         if tables != []: # if files exist for donor
             donor_tables[donor] = tables
@@ -111,14 +73,4 @@ if __name__ == "__main__":
     donor_beds = concat_bed_by_donor(donor_tables)
     merge_beds = merge_and_filter_peaks(donor_beds)
     err_regions = intersect_donor_peaks(merge_beds)
-    err_regions.to_csv(f"{args.reference}/ErrorProne/bulk.NIH_Aging.error-prone.bed", sep="\t", header=False, index=False)
-
-    # kr_files = glob.glob(f"{os.path.normpath(args.reference)}/RepeatMasker/*.bed")
-
-    # knr_anns = ["1kgp", "1019_ONT", "gnomAD-SV", "HGSVC3", "nyuwa", "xTea"] # TODO: don't hard code this
-    # knr_files = []
-    # for ann in knr_anns:
-    #     knr_file = glob.glob(f"{os.path.normpath(args.reference)}/{ann}/*.bed")
-    #     knr_files += knr_file
-            
-    # kr_df, knr_df = concat_and_merge_annotations(kr_files, knr_files)
+    err_regions.to_csv(f"{args.outdir}/ErrorProne/bulk.NIH_Aging.error-prone.bed", sep="\t", header=False, index=False)
