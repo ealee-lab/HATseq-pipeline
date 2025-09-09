@@ -13,12 +13,12 @@ args<-commandArgs(TRUE)
 big_table_file <- args[1]
 library <- args[2]
 plots_path <- args[3]
-filtered_peaks <- args[4]
+candidate_peaks <- args[4]
 summary <- args[5]
 error_prone <- args[6]
 truth_set <- args[7]
 genome <- args[8]
-big_table_filter_annotation_file <- paste0(sub("_filtered_peaks.tsv$", "", filtered_peaks),
+big_table_filter_annotation_file <- paste0(sub("_candidate_peaks.tsv$", "", candidate_peaks),
                                                "_big_table_filter_reasons.tsv")
 
 # Read input and define columns
@@ -42,18 +42,18 @@ big_table$number_templates <- unlist(lapply(strsplit(big_table$usp, ";"), `[[`,1
 big_table$number_templates <- as.numeric(big_table$number_templates)
 big_table$template_ratio <- NA
 big_table$template_ratio[big_table$number_templates > 1] <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates >1], ";"), `[[`, 2)), ","), `[[`, 2)) / as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates >1] , ";"), `[[`, 2)), ","), `[[`, 1))
-big_table$most_duplicates <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 2)), ","), `[[`, 1)) 
-big_table$breadth_ratio <- as.numeric(big_table$reads) / as.numeric(big_table$number_templates)
-big_table$breadth <- as.numeric(big_table$end) - as.numeric(big_table$start)
-big_table$peak_shape <- strsplit(unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 4)), ",")
-big_table$max_depth <- unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 2))
+# big_table$most_duplicates <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 2)), ","), `[[`, 1)) 
+# big_table$breadth_ratio <- as.numeric(big_table$reads) / as.numeric(big_table$number_templates)
+# big_table$breadth <- as.numeric(big_table$end) - as.numeric(big_table$start)
+# big_table$peak_shape <- strsplit(unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 4)), ",")
+# big_table$max_depth <- unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 2))
 big_table$polyA_percent <- big_table$polyA / big_table$reads
-big_table$segdups_annotation <- FALSE
-big_table$segdups_annotation[big_table$SegDups != '.'] <- TRUE
-big_table$chimera[big_table$chimera == ""] <- "chimera"
-big_table$misalignment[big_table$misaligned == ""] <- "misalignment"
-big_table$polymer_annotation <- FALSE
-big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
+# big_table$segdups_annotation <- FALSE
+# big_table$segdups_annotation[big_table$SegDups != '.'] <- TRUE
+# big_table$chimera[big_table$chimera == ""] <- "chimera"
+# big_table$misalignment[big_table$misaligned == ""] <- "misalignment"
+# big_table$polymer_annotation <- FALSE
+# big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
 big_table$RPM_log <- log(big_table$RPM)
 
 
@@ -71,6 +71,7 @@ cat(paste0("Total peaks with Gmotif % less than 50%: ", nrow(big_table[big_table
 # Initialize columns
 big_table$classification <- "Candidate"
 big_table$filter_reason <- "-NA-"
+big_table$candidate <- TRUE
 big_table$FP <- FALSE
 
 # Label KR peaks
@@ -115,49 +116,51 @@ big_table$classification[grepl("L1PA2|L1PA3|L1PA4|L1PA5|L1PA6|L1PA7", big_table$
                         !(big_table$classification == "KR" | big_table$classification == "KNR")] <- "Off-target"
 big_table$filter_reason[big_table$classification == "Off-target"] <- "Off-target"
 
-# Filtering candidate peaks for FPs
-# Filters are successive, meaning that a FP peak will be labeled by the first filter that catches it
 
+# Filter candidate peaks for FPs
+big_table$candidate[big_table$classification != "Candidate"] <- FALSE
+
+# Filters are successive, meaning that a FP peak will be labeled by the first filter that catches it
 # Filter peaks in non-canonical chromosomes
 cat("\nCANDIDATE FILTERS", file=summary_file, sep="\n")
-big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & !(big_table$chrm %in% canonical_chrs)] <- "chrms"
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & !(big_table$chrm %in% canonical_chrs)] <- "chrms"
 big_table$FP[big_table$filter_reason == "chrms"] <- TRUE
 cat(paste0("Non-canonical chroms: ", nrow(big_table[big_table$filter_reason == "chrms",])), file=summary_file, sep="\n")
 
 if (library != "bulk") {
   # In PTA libraries, remove smaller peaks nearby larger ones that are due to incorrect amplification during PTA 
-  big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$nearest_RPM_ratio < 0.2)] <- "nearby_peak"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$nearest_RPM_ratio < 0.2)] <- "nearby_peak"
   big_table$FP[big_table$filter_reason == "nearby_peak"] <- TRUE
   cat(paste0("Nearby larger peak (less than 20% ratio): ", nrow(big_table[big_table$filter_reason == "nearby_peak",])), file=summary_file, sep="\n")
 
   # In single-cell libraries, remove peaks with too few original fragments
-  big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$number_templates <= 2)] <- "num_templates"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates <= 2)] <- "num_templates"
   big_table$FP[big_table$filter_reason == "num_templates"] <- TRUE
   cat(paste0("Number of templates less than 3: ", nrow(big_table[big_table$filter_reason == "num_templates",])), file=summary_file, sep="\n")
 
-  big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$template_ratio <= 0.25)] <- "template_ratio"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio <= 0.25)] <- "template_ratio"
   big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
   cat(paste0("Template ratio: ", nrow(big_table[big_table$filter_reason == "template_ratio",])), file=summary_file, sep="\n")
 }
 
-big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$chimera == "chimera")] <- "chimera"
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$chimera == "chimera")] <- "chimera"
 big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
 cat(paste0("Chimera: ", nrow(big_table[big_table$filter_reason == "chimera",])), file=summary_file, sep="\n")
 
-big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$misaligned == "misalignment")] <- "misaligned_reads"
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$misaligned == "misalignment")] <- "misaligned_reads"
 big_table$FP[big_table$filter_reason == "misaligned_reads"] <- TRUE
 cat(paste0("Misaligned: ", nrow(big_table[big_table$filter_reason == "misaligned_reads",])), file=summary_file, sep="\n")
 
-big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
 big_table$FP[big_table$filter_reason == "polyApercent"] <- TRUE
 cat(paste0("No polyA containing reads (junction spanning): ", nrow(big_table[big_table$filter_reason == "polyApercent",])), file=summary_file, sep="\n")
 
 if (library == "bulk") {
-  big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$RPM <= 1)] <- "RPM"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM <= 1)] <- "RPM"
   big_table$FP[big_table$filter_reason == "RPM"] <- TRUE
   cat(paste0("RPM less than or equal 1: ", nrow(big_table[(big_table$filter_reason == "RPM"),])), file=summary_file, sep="\n")
 } else {
-  big_table$filter_reason[(big_table$classification == "Candidate") & !(big_table$FP) & (big_table$RPM <= 5)] <-"RPM"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM <= 5)] <-"RPM"
   big_table$FP[big_table$filter_reason == "RPM"] <- TRUE
   cat(paste0("RPM less than or equal 5: ", nrow(big_table[big_table$filter_reason == "RPM",])), file=summary_file, sep="\n")
 }
@@ -182,7 +185,7 @@ if (error_prone != "-NA-") {
   big_bed <- big_table[, c("chrm","start","end","peak","RPM","strand")]
   error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm","start","end"), col_types="cii")
     
-  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wa=TRUE)[, "V4"]
+  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wo=TRUE)[, "V4"] # TODO: debug
 
   # big_table$error-prone <- FALSE
   # big_table$error-prone[big_table$peak %in% error_peak_list] <- TRUE
@@ -191,6 +194,7 @@ if (error_prone != "-NA-") {
                           (big_table$classification == "SOM_private" | big_table$classification == "SOM_clonal") & 
                           !(big_table$FP)] <- "error-prone"
   big_table$FP[big_table$filter_reason == "error-prone"] <- TRUE
+  big_table$classification[big_table$FP] <- "FP"
   cat(paste0("Overlapping error-prone region: ", nrow(big_table[big_table$filter_reason == "error-prone",])), file=summary_file, sep="\n")
 }
 
@@ -374,17 +378,16 @@ filter_RPM
 # filter_reasons_KNR
 dev.off()
 
-# Filtered table
-filtered_cols = c("chrm","start","end","peak","classification","strand",
-                  "RPM","shape","usp","gmotif_percent","polyA_percent",
-                  "repeatmasker","evrony","homopolymers",
-                  "i1kgp","gnomad","nyuwa","xtea","hgsvc3","melt_lra","ont")
+# Candidate table
+candidate_cols = c("chrm","start","end","peak","RPM","strand",
+                  "classification","filter_reason",
+                  "repeatmasker","SegDups","gmotif_percent","usp","polyA_percent")
 
 if (truth_set != "-NA-") {
-  filtered_table <- big_table[big_table$classification != "FP", c(filtered_cols, "true_insertion_ID")]
+  candidate_table <- big_table[big_table$candidate, c(candidate_cols, "true_insertion_ID")]
 } else {
-  filtered_table <- big_table[big_table$classification != "FP", filtered_cols]
+  candidate_table <- big_table[big_table$candidate, candidate_cols]
 }
 
-write.table(filtered_table, filtered_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
+write.table(candidate_table, candidate_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
 write.table(big_table[, lapply(big_table, class) != "list"], big_table_filter_annotation_file, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")

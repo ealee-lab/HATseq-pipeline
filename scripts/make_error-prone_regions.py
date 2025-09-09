@@ -6,7 +6,7 @@ import pybedtools
 from pybedtools import BedTool
 
 def concat_bed_by_donor(donor_tables: dict):
-    """Concatenate tissue-specific UNK/SOM peaks such that each donor has a 
+    """Concatenate tissue-specific candidate peaks such that each donor has a 
     dataframe with all peaks."""
     donor_beds = []
 
@@ -14,8 +14,7 @@ def concat_bed_by_donor(donor_tables: dict):
         beds = []
         for table in donor_tables[donor]:
             bed = pd.read_csv(table, sep="\t", 
-                              usecols = ["chrm","start","end","peak","RPM","strand","classification"])
-            bed = bed[(bed["classification"] == "UNK") | (bed["classification"].str.contains("SOM"))]
+                              usecols = ["chrm","start","end","peak","RPM","strand"])
             bed = bed[["chrm","start","end","peak","RPM","strand"]]
             beds.append(bed)
         donor_bed = pd.concat(beds)
@@ -54,7 +53,7 @@ if __name__ == "__main__":
         description="A script to generate error-prone regions.")
     parser.add_argument("donor_list", help="List of donors to generate regions from")
     parser.add_argument("resdir", help="Parent directory with pipeline results")
-    parser.add_argument("outdir", help="Output directory")
+    parser.add_argument("outfile", help="Path to output file of error-prone regions")
     args = parser.parse_args()
 
     with open(args.donor_list, "r") as f:
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     donor_tables = {}
     for donor in donors:
         tables = glob.glob(
-            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*filtered_peaks.tsv")
+            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*candidate_peaks.tsv")
         
         if tables != []: # if files exist for donor
             donor_tables[donor] = tables
@@ -73,4 +72,4 @@ if __name__ == "__main__":
     donor_beds = concat_bed_by_donor(donor_tables)
     merge_beds = merge_and_filter_peaks(donor_beds)
     err_regions = intersect_donor_peaks(merge_beds)
-    err_regions.to_csv(f"{args.outdir}/ErrorProne/bulk.NIH_Aging.error-prone.bed", sep="\t", header=False, index=False)
+    err_regions.to_csv(f"{args.outfile}", sep="\t", header=False, index=False)

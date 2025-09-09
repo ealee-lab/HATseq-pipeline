@@ -13,6 +13,7 @@ dependencies:
   - samtools
   - cutadapt
   - bedtools=2.27.1
+  - pybedtools
   - samblaster
   - fastqc
   - sambamba

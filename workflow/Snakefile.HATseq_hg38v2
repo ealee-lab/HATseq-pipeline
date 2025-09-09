@@ -25,7 +25,7 @@ SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
 
 # Create reference file constants
-EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" # Lifted over
+EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
 REPEAT_MASKER = REFERENCE_DIR + "/RepeatMasker/hg38.repeatmasker.bed"
 HOMOPOLYMERS = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" # Lifted over
 SEGDUPS = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
@@ -56,7 +56,7 @@ rule HATseq:
 		"{sample}/{sample}_polyA_trimmed.txt",
 		"{sample}/{sample}_chimera_hash.txt",
 		"{sample}/{sample}_big_table.tsv",
-		"{sample}/{sample}_filtered_peaks.tsv"
+		"{sample}/{sample}_candidate_peaks.tsv"
 		],
 		sample=SAMPLES.index) 
 
@@ -98,7 +98,7 @@ rule preprocessing:
 		L1HS_adapter_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq1.gz"),
 		L1HS_adapter_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"),
 		L1HS_primer_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq1.gz"),
-		L1HS_primer_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz"),
+		L1HS_primer_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz",
 		subfamily_specific_R2_list = "{sample}/{sample}_subfamily_specific_R2_list.txt",
 		L1HS_adapter_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR1_fastq1.gz"),
 		L1HS_primer_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR1_fastq1.gz"),
@@ -283,7 +283,7 @@ rule Ntag:
 		adapter = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
 	threads: 1
 	resources:
-		runtime = 20, # TODO: make function
+		runtime = get_Ntag_runtime,
 		mem_mb = get_Ntag_mem_mb
 	group: "fastq"
 	shell:
@@ -307,7 +307,7 @@ rule gmotif:
 	benchmark:
 		"benchmarks/gmotif/{sample}.tsv"
 	resources:
-		runtime = 12, # TODO: make function
+		runtime = get_gmotif_runtime,
 		mem_mb = get_gmotif_mem_mb
 	group: "fastq"
 	shell:
@@ -328,8 +328,8 @@ rule junction_spanning:
 		max_err = 0,
 		adapter_T = "TTTTTTTT" 
 	resources:
-		runtime = 6,
-		mem_mb = get_junction_spanning_mem_mb
+		runtime = get_junction_spanning_runtime,
+		mem_mb = get_min_mem_mb
 	group: "fastq"
 	shell:
 		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
@@ -348,7 +348,7 @@ rule extract_clipping:
 	benchmark:
 		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
-		runtime = 6, # TODO: make function
+		runtime = get_extract_clipping_runtime,
 		mem_mb = get_extract_clipping_mem_mb
 	group: "bam"
 	run:
@@ -419,8 +419,8 @@ rule peak_calling:
 	benchmark:
 		"benchmarks/peak_calling/{sample}.tsv"
 	resources:
-		runtime = 6,
-		mem_mb = lambda wildcards, input: max(2 * input.size_mb, 2000)
+		runtime = get_peak_calling_runtime,
+		mem_mb = get_peak_calling_mem_mb
 	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' "
@@ -477,8 +477,8 @@ rule count_templates:
 	benchmark:
 		"benchmarks/run_count_templates/{sample}.tsv"
 	resources:
-		runtime = 6,
-		mem_mb = lambda wildcards, input: max(6 * input.size_mb, 2000)
+		runtime = get_count_templates_runtime,
+		mem_mb = get_count_templates_mem_mb
 	group: "peaks"
 	run:
 		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
@@ -688,8 +688,8 @@ rule intersect_databases:
 	benchmark:
 		"benchmarks/intersect_databases/{sample}.tsv"
 	resources:
-		runtime = 1,
-		mem_mb = 4000 # TODO: memory spikes, resolve if possible
+		runtime = get_min_runtime,
+		mem_mb = get_intersect_databases_mem_mb
 	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
@@ -748,8 +748,8 @@ rule create_big_table:
 	benchmark:
 		"benchmarks/run_big_table/{sample}.tsv"
 	resources:
-		runtime = 15, # TODO: make function
-		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 4000)
+		runtime = get_create_big_table_runtime,
+		mem_mb = get_create_big_table_mem_mb
 	group: "classify"
 	run:
 		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
@@ -773,12 +773,12 @@ rule create_big_table:
 		peaks = pd.read_table(input.peaks, sep="\t", header=0)
 		big_table = peaks.merge(big_table, how="left", on="peak_name")
 		del peaks
-		chimera = pd.read_table(input.chimera, sep="\t", header=None,names=["peak_name"])
+		chimera = pd.read_table(input.chimera, sep="\t", header=None, names=["peak_name"])
 		chimera['chimera'] = 'chimera'
-		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None,names=["peak_name"])
+		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None, names=["peak_name"])
 		nonchimera['chimera'] = 'nonchimera'
 		chimeras = pd.concat([chimera, nonchimera])
-		misalignment = pd.read_table(input.misalignment, sep="\t",header=None,names=["peak_name"])
+		misalignment = pd.read_table(input.misalignment, sep="\t", header=None, names=["peak_name"])
 		misalignment['misalignment'] = 'misalignment'
 		chimeras = chimeras.merge(misalignment, how="left", on=["peak_name"]).fillna("pass")
 		big_table = big_table.merge(chimeras, how="left", on="peak_name")
@@ -814,8 +814,8 @@ rule filter_and_classify:
 		big_table = "{sample}/{sample}_big_table.tsv",
 	output:
 		filter_reasons = "{sample}/{sample}_big_table_filter_reasons.tsv",
-		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv",
-		#plots = "{sample}/{sample}_filtering_plots.pdf",
+		candidate_peaks = "{sample}/{sample}_candidate_peaks.tsv",
+		plots = "{sample}/{sample}_filtering_plots.pdf",
 		igv_script = "{sample}/{sample}_igv.sh",
 		summary_file = "{sample}/{sample}_summary.txt"
 	benchmark:
@@ -828,14 +828,14 @@ rule filter_and_classify:
 	conda:
 		"envs/plotR.yml"
 	resources: 
-		runtime = 1,
-		mem_mb = 800,
+		runtime = get_filter_and_classify_runtime,
+		mem_mb = get_filter_and_classify_mem_mb,
 	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {LIBRARY} placeholder {output.filtered_peaks} {output.summary_file} "
+			"{input.big_table} {LIBRARY} {output.plots} {output.candidate_peaks} {output.summary_file} "
 			"{params.error_prone} {params.truth_set} {params.hg38} \n"
-		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | "
+		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.candidate_peaks} | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
 			"> {output.igv_script}"
 
@@ -870,8 +870,8 @@ rule map_transduction_fasta:
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8
 	resources:
-		runtime = 60,
-		mem_mb = 2000,
+		runtime = get_map_transduction_fasta_runtime,
+		mem_mb = get_map_transduction_fasta_mem_mb,
 	shell:
 		"set -x \n"
 
@@ -957,8 +957,8 @@ rule transduction_big_table:
 	benchmark:
 		"benchmarks/run_transduction_big_table/{sample}.tsv"
 	resources:
-		runtime = 20,
-		mem_mb = lambda wildcards, input: max(4 * input.size_mb, 2000)
+		runtime = get_transduction_big_table_runtime,
+		mem_mb = get_transduction_big_table_mem_mb
 	run:
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed, sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
@@ -999,8 +999,8 @@ rule call_transductions:
 	conda:
 		"envs/plotR.yml"
 	resources:
-		runtime = 10, 
-		mem_mb = 1000,
+		runtime = get_min_runtime, 
+		mem_mb = get_call_transductions_mem_mb,
 	shell:
 		"Rscript {workflow.basedir}/scripts/transduction_calling.R "
 			"{input.transduction_big_table} {LIBRARY} {output.transduction_plots} "
