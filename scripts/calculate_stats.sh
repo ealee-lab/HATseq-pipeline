@@ -2,7 +2,7 @@
 
 # Calculate precision, recall, and F1 score for each sample.
 
-peak_file=$1 # Path to filtered_peaks.tsv intersected with ground truth set (GTS)
+peak_file=$1 # Path to candidate_peaks.tsv intersected with ground truth set (GTS)
 true_peaks=$2 # Path to GTS
 out_file=$3 # Path to output file with statistics
 
@@ -11,9 +11,9 @@ fp=$(grep -E 'UNK|SOM' "${peak_file}" | \
     awk -v FS='\t' '{if ($NF == "-NA-") print $4}' | wc -l)
 
 # Number of true peaks found (i.e. number of peaks that overlap with GTS)
-# (Don't recount if 1 called peak overlaps >1 true peaks)
-tp=$(awk -v FS='\t' '{print $4}' "${true_peaks}" | grep -f - "${peak_file}" | \
-    grep -E 'UNK|SOM' | awk -v FS='\t' '{if ($NF != "-NA-") print $4}' | \
+# (Don't re-count if 1 called peak overlaps >1 true peaks)
+tp=$(awk -v FS='\t' '{print $4}' "${true_peaks}" | grep -w -f - "${peak_file}" | \
+    grep -E 'UNK|SOM' | awk -v FS='\t' '{print $4}' | \
     sort | uniq | wc -l) 
 
 num_called=$((${tp} + ${fp}))

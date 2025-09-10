@@ -19,7 +19,7 @@ config=$(realpath $3)
 outdir=$(realpath $4)
 tmpdir=$(realpath $5)
 
-# Create enviornment if needed and activate 
+# Create environment if needed and activate 
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
 

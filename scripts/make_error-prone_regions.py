@@ -31,7 +31,6 @@ def merge_and_filter_peaks(donor_beds: list):
         donor_bt = BedTool.from_dataframe(donor_bed)
         merge_bt = donor_bt.merge(s=True, c=[4,5,6], o=["distinct","mean","distinct"])
         merge_bed = merge_bt.to_dataframe()
-        # merge_bed = merge_bed[merge_bed["score"] < 100]
         merge_beds.append(merge_bed)
 
     return merge_beds   
@@ -42,8 +41,9 @@ def intersect_donor_peaks(merge_beds: list):
     x = BedTool()
     merge_fns = [BedTool.from_dataframe(merge_bed).fn for merge_bed in merge_beds]
     regions_bt = x.multi_intersect(i=merge_fns)
-    err_regions = regions_bt.to_dataframe(disable_auto_names=True, header=None)
-    err_regions = err_regions[err_regions[3] > 1] # peak in multiple files
+    regions_bt_merge = regions_bt.merge(c=4, o="max")
+    err_regions = regions_bt_merge.to_dataframe(disable_auto_names=True, header=None)
+    # err_regions = err_regions[err_regions[3] > 1] # peak in multiple files
     err_regions = err_regions[[0,1,2,3]]
     err_regions[4] = err_regions[3] / len(merge_beds) # % of donors with peak
     return err_regions

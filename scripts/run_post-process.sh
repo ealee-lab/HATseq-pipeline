@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Post-process each sample by calculating statistics. If your resdir contains
-# samples that were not intersected with a truth set, this script will error
-# on those samples.
+# Post-process each sample by calculating statistics.
 # 
 # Usage: bash run_post-process.sh <resdir> <tdir>
 
