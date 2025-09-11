@@ -1,5 +1,8 @@
 #!/bin/bash
+
 # Make error-prone regions from recurrent noise peaks
+#
+# Usage: bash run_make_error-prone_regions.sh <donor_list> <resdir> <outfile>
 
 #SBATCH --time=0-0:02  # running time (in hours-minutes-seconds)
 #SBATCH --cpus-per-task=1  # number of cpus
@@ -9,7 +12,7 @@
 #SBATCH --mail-user=your.email@you.com  # email address to send the job status
 #SBATCH --output=./slurm_logs/errorprone_%j.out
 #SBATCH --error=./slurm_logs/errorprone_%j.err
-#SBATCH -p bch-compute
+#SBATCH -p your_partition
 
 donor_list=$(realpath $1)
 resdir=$(realpath $2)

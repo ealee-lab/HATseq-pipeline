@@ -6,8 +6,8 @@
 
 #SBATCH --time=0-0:02  # running time (in hours-minutes-seconds)
 #SBATCH --cpus-per-task=1  # number of cpus
-#SBATCH --mem-per-cpu=80M  # amount of memory (RAM) per cpu
-#SBATCH -p bch-compute
+#SBATCH --mem-per-cpu=50M  # amount of memory (RAM) per cpu
+#SBATCH -p your_partition
 
 resdir=$(realpath $1) # Parent directory with pipeline results
 tdir=$(realpath $2) # Directory with truth sets
