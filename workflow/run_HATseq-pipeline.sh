@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Use Slurm to run the HATseq pipeline
 
 #SBATCH --time=0-12:00  # running time (in hours-minutes-seconds)
@@ -10,29 +11,35 @@
 #SBATCH --nodes=1  # number of gpu nodes
 #SBATCH --error=./slurm_logs/Hatseq_%j.err
 #SBATCH --output=./slurm_logs/Hatseq_%j.out
-#SBATCH -p your_partition
-#SBATCH -A your_account 
+#SBATCH --error=./slurm_logs/Hatseq_%j.err
+#SBATCH -p bch-compute
+ 
+config=$(realpath $1)
+outdir=$(realpath $2)
+tmpdir=$(realpath $3)
+profile=$(realpath $4)
 
-snakefile=$1 
-profile=$2
-config=$3
-outdir=$4
-tmpdir=$5
-
-# Activate environment 
+# Create environment if needed and activate 
 CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
-conda activate HATseq
+
+if conda env list | grep -E "^HATseq\b"; then
+    conda activate HATseq
+else
+    conda env create --file envs/conda.yml --yes
+    conda activate HATseq
+fi
 
 export TMPDIR=${tmpdir} # used as tmpdir by snakemake
 
-snakemake --unlock -s ${snakefile} \
-    --profile ${profile} \
-    --configfile ${config} \
-    --directory ${outdir}
-
-snakemake -s ${snakefile} \
-    --profile ${profile} \
+# Run the pipeline
+snakemake --unlock -s Snakefile.HATseq \
     --configfile ${config} \
     --directory ${outdir} \
+    --profile ${profile}
+
+snakemake -s Snakefile.HATseq \
+    --configfile ${config} \
+    --directory ${outdir} \
+    --profile ${profile} \
     --use-conda --conda-frontend conda

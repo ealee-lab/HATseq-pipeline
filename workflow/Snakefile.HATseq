@@ -12,6 +12,9 @@ import math
 import gzip 
 import statistics
 
+# Load helper functions
+include: "rules/common.smk"
+
 # Read config variables as constants
 SAMPLES = pd.read_csv(config["samples"], sep="\t", dtype=str).set_index("sample_name")
 TE_NAME = config["te_name"]
@@ -22,16 +25,21 @@ SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
 
 # Create reference file constants
-EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed.chr.bed" #Lifted over
-REPEAT_MASKER = REFERENCE_DIR + "/RepeatMasker/repeatmasker.v38.bed"
-HOMOPOLYMERS = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" #Lifted over
+EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
+REPEAT_MASKER = REFERENCE_DIR + "/RepeatMasker/hg38.repeatmasker.bed"
+HOMOPOLYMERS = REFERENCE_DIR + "/human/hg38.hg19.homo8.chr.bed" # Lifted over
+SEGDUPS = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
 HG38 = REFERENCE_DIR + "/human/hg38.genome"
 L1HS_DECOY = REFERENCE_DIR + "/L1HS_decoy_sequence.fasta"
-IKGP = REFERENCE_DIR + "/1kgp/1kgp.AF.ME.final.hg38.bed"
-GNOMAD = REFERENCE_DIR + "/gnomAD-SV/gnomad_v4_MEI.sites_hg38.revised.chr.bed" 
-XTEA = REFERENCE_DIR + "/xTea/xTea-Borges-Monroy2021.accessioned.bed"
+I1KGP = REFERENCE_DIR + "/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed"
+GNOMAD = REFERENCE_DIR + "/gnomAD-SV/gnomad.v4.1.ME.sites.bed" 
+XTEA = REFERENCE_DIR + "/xTea/xTea_Borges-Monroy2021.accessioned.bed"
 NYUWA = REFERENCE_DIR + "/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed"
-SEGDUPS = REFERENCE_DIR + "/SegDup/hg38.genomicSuperDups.v37.chr.bed"
+HGSVC3 = REFERENCE_DIR + "/HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed"
+HGSVC3_MELT_LRA = REFERENCE_DIR + "/HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed"
+ONT1019 = REFERENCE_DIR + "/1019_ONT/1019_ONT_Schloissnig2025.bed"
+
+localrules: HATseq # do not submit target rule as separate job
 
 rule HATseq:
 	input:
@@ -48,7 +56,7 @@ rule HATseq:
 		"{sample}/{sample}_polyA_trimmed.txt",
 		"{sample}/{sample}_chimera_hash.txt",
 		"{sample}/{sample}_big_table.tsv",
-		"{sample}/{sample}_filtered_peaks.tsv"
+		"{sample}/{sample}_candidate_peaks.tsv"
 		],
 		sample=SAMPLES.index) 
 
@@ -61,13 +69,16 @@ rule qc:
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
 		fastp_html_report = "{sample}/{sample}_fastp_html_report.txt",
 		fastqc_report_path = directory("{sample}/{sample}_fastqc_report/")
+	benchmark:
+		"benchmarks/qc/{sample}.tsv"
 	params:
 		illumina_adapter = "AGATCGGAAGAGC",
 		length_req = 50,
 	threads: 4
 	resources:
-		runtime = 60,
-		mem_mb = lambda wildcards, input: input.size_mb,
+		runtime = get_qc_runtime,
+		mem_mb = get_qc_mem_mb
+	group: "fastq"
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
 			"-i {input.raw_fastq1} -I {input.raw_fastq2} "
@@ -84,27 +95,29 @@ rule preprocessing:
 		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz", 
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
 	output:
-		L1HS_adapter_trimmed_fromR2_fastq1 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq1.gz",
-		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz",
-		L1HS_primer_trimmed_fromR2_fastq1 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq1.gz",
+		L1HS_adapter_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq1.gz"),
+		L1HS_adapter_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"),
+		L1HS_primer_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq1.gz"),
 		L1HS_primer_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz",
 		subfamily_specific_R2_list = "{sample}/{sample}_subfamily_specific_R2_list.txt",
-		L1HS_adapter_trimmed_fromR1_fastq1 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR1_fastq1.gz",
-		L1HS_primer_trimmed_fromR1_fastq1 = "{sample}/{sample}_L1HS_primer_trimmed_fromR1_fastq1.gz",
-		L1HS_untrimmed_fromR1_fastq1 = "{sample}/{sample}_L1HS_untrimmed_fromR1_fastq1.gz",
+		L1HS_adapter_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR1_fastq1.gz"),
+		L1HS_primer_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR1_fastq1.gz"),
+		L1HS_untrimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_untrimmed_fromR1_fastq1.gz"),
 		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
 		mappable_R1_fastq1 = "{sample}/{sample}_mappable_R1_fastq1.gz",
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
 		cutadapt_report = "{sample}/{sample}_cutadapt_report.txt"
+	benchmark:
+		"benchmarks/preprocessing/{sample}.tsv"
 	params:
 		min_len = 5,
 		min_len_informative = 70,
 		min_ovlp = 20,
 		max_err = 0.05,
 		adapter_L1HS = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC",
-		adapter_primer = "^TTAGTGGGTGCAGCGCACCA" ,
-		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC" ,
+		adapter_primer = "^TTAGTGGGTGCAGCGCACCA",
+		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC",
 		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
 		L1PA_young_seq = "TTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
 		L1HSseq = "ATTATACTCTAAGTTTTAGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAATGTGTCATCTAGCATTAGGTATATCTCCC",
@@ -112,8 +125,9 @@ rule preprocessing:
 		adapter_T = "TTTTTTTT" 
 	threads: 4
 	resources:
-		runtime = 60,
-		mem_mb = lambda wildcards, input: input.size_mb,
+		runtime = get_preprocessing_runtime,
+		mem_mb = get_preprocessing_mem_mb
+	group: "fastq"
 	shell:
 		"set -x \n"
 
@@ -187,22 +201,25 @@ rule alignment:
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
 	output:
-		bwa_bam = "{sample}/{sample}_bwa.bam",
+		bwa_bam = temp("{sample}/{sample}_bwa.bam"),
 		bwa_sorted_bam = "{sample}/{sample}_bwa_sorted.bam", 
 		bwa_sorted_index = "{sample}/{sample}_bwa_sorted.bam.bai",
-		trim_bwa_bam = "{sample}/{sample}_trim_bwa.bam",
-		trim_uniq_bam = "{sample}/{sample}_trim_uniq.bam", # polyT-trimmed reads
-		trim_uniq_sorted_bam = "{sample}/{sample}_trim_uniq_sorted.bam",
+		trim_bwa_bam = temp("{sample}/{sample}_trim_bwa.bam"),
+		trim_uniq_bam = temp("{sample}/{sample}_trim_uniq.bam"), 
+		trim_uniq_sorted_bam = "{sample}/{sample}_trim_uniq_sorted.bam", # polyT-trimmed reads
 		trim_uniq_sorted_index = "{sample}/{sample}_trim_uniq_sorted.bam.bai",
 		trim_peaks = "{sample}/{sample}_trim_peaks.bed",
 		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
 		peak_sorted_index = "{sample}/{sample}_peak_sorted_bwa.bam.bai"
+	benchmark:
+		"benchmarks/alignment/{sample}.tsv"
 	params:
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8 
 	resources:
-		runtime = 60,
-		mem_mb = lambda wildcards, input: 4 * input.size_mb,
+		runtime = get_alignment_runtime,
+		mem_mb = get_alignment_mem_mb
+	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
 		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
@@ -252,22 +269,6 @@ rule alignment:
 			"samtools sort -o {output.peak_sorted_bam} - \n"
 		"sambamba index {output.peak_sorted_bam} \n"
 
-rule gmotif:
-	input:
-		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
-		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"
-	output:
-		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt"
-	resources:
-		runtime = 10,
-		mem_mb = lambda wildcards, input: 2.5 * input.size_mb,
-	shell:
-		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
-			"seqtk seq -a - | "
-			"grep 'CTTAGAGT' -B 1 | "
-			"seqkit seq -i -n - | sort | uniq "
-			"> {output.pass_gmotif_list} \n"
-
 rule Ntag:
 	input:
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
@@ -276,12 +277,15 @@ rule Ntag:
 		Ntag_pre_fastq2 = "{sample}/{sample}_Ntag_pre_fastq2.gz",
 		Ntag_trimmed_fastq2 = "{sample}/{sample}_Ntag_trimmed_fastq2.gz",
 		Ntag_list = "{sample}/{sample}_Ntag_list.txt"
+	benchmark:
+		"benchmarks/Ntag/{sample}.tsv"
 	params:
 		adapter = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
-	threads: 2 
+	threads: 1
 	resources:
-		runtime = 15,
-		mem_mb = lambda wildcards, input: 1.5 * input.size_mb,
+		runtime = get_Ntag_runtime,
+		mem_mb = get_Ntag_mem_mb
+	group: "fastq"
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - "
 			"> {output.Ntag_pre_fastq2} \n"
@@ -293,6 +297,45 @@ rule Ntag:
 			"grep '^>' | "
 			"cut -b2- "
 			"> {output.Ntag_list}"
+
+rule gmotif:
+	input:
+		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
+		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"
+	output:
+		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt"
+	benchmark:
+		"benchmarks/gmotif/{sample}.tsv"
+	resources:
+		runtime = get_gmotif_runtime,
+		mem_mb = get_gmotif_mem_mb
+	group: "fastq"
+	shell:
+		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
+			"seqtk seq -a - | "
+			"grep 'CTTAGAGT' -B 1 | "
+			"seqkit seq -i -n - | sort | uniq "
+			"> {output.pass_gmotif_list} \n"
+
+rule junction_spanning:
+	input:
+		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
+	output:
+		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt"
+	benchmark:
+		"benchmarks/junction_spanning/{sample}.tsv"
+	params:
+		max_err = 0,
+		adapter_T = "TTTTTTTT" 
+	resources:
+		runtime = get_junction_spanning_runtime,
+		mem_mb = get_min_mem_mb
+	group: "fastq"
+	shell:
+		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
+			"{input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
+			"seqkit seq -i -n - "
+			"> {output.polyA_trimmed} \n"
 	
 rule extract_clipping:
 	input:	
@@ -302,9 +345,12 @@ rule extract_clipping:
 		softclip5p_fasta = "{sample}/{sample}_softclip_5p.fa.gz",
 		hardclip3p_table = "{sample}/{sample}_hardclip_3p.tsv",
 		hardclip5p_table = "{sample}/{sample}_hardclip_5p.tsv"
+	benchmark:
+		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
-		runtime = 10,
-		mem_mb = lambda wildcards, input: input.size_mb,
+		runtime = get_extract_clipping_runtime,
+		mem_mb = get_extract_clipping_mem_mb
+	group: "bam"
 	run:
 		ofasta5p=gzip.open(output.softclip5p_fasta, 'wt')
 		otable5p=open(output.hardclip5p_table, 'w')
@@ -370,9 +416,12 @@ rule peak_calling:
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
 		breakpoint_fa = "{sample}/{sample}_breakpoint.fa",
 		peak_seq = "{sample}/{sample}_peak_sequence.fa"
+	benchmark:
+		"benchmarks/peak_calling/{sample}.tsv"
 	resources:
-		runtime = 10,
-		mem_mb = lambda wildcards, input: 2 * input.size_mb,
+		runtime = get_peak_calling_runtime,
+		mem_mb = get_peak_calling_mem_mb
+	group: "peaks"
 	shell:
 		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' "
 			"> {output.peaks} \n"
@@ -418,14 +467,153 @@ rule peak_calling:
 
 		"bedtools getfasta -fi {input.ref_genome} -bed {output.peaks} -name > {output.peak_seq} \n"
 
+rule count_templates:
+	input:
+		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
+		peaks = "{sample}/{sample}_peaks.bed"
+	output:
+		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
+		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt"
+	benchmark:
+		"benchmarks/run_count_templates/{sample}.tsv"
+	resources:
+		runtime = get_count_templates_runtime,
+		mem_mb = get_count_templates_mem_mb
+	group: "peaks"
+	run:
+		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
+		ibed=open(input.peaks, 'r')
+		obed=open(output.unique_start_positions, 'w')
+		header = ["#peak_name", "num_bam_reads", "num_peak_reads", "num_usp;depth", 
+				  "max_neighbor_difference", "median_neighbor_difference", "mean_neighbor_difference"]
+		obed.write("\t".join(header) + "\n")
+		ibam_total_reads = sum([i[3] for i in ibam.get_index_statistics()])
+		peak_readID_list = []
+		for peak_line in ibed:
+			if peak_line.startswith("#"):
+				continue
+			peak = peak_line.strip().split("\t")
+			peak_iter = ibam.fetch(peak[0], int(peak[1]), int(peak[2]))
+			this_peak_usp_dictionary = {}
+			for read in peak_iter:
+				if read.is_reverse:
+					key = read.reference_name + ":" + str(read.reference_end)
+				else:
+					key = read.reference_name + ":" + str(read.reference_start)
+
+				if peak[5] == "-":
+					if read.is_reverse:
+						if not key in this_peak_usp_dictionary.keys():
+							this_peak_usp_dictionary[key] = (0,0)
+						peak_readID_list.append([peak[3], read.query_name])
+
+						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
+														 this_peak_usp_dictionary[key][1]+1)
+				elif peak[5] == "+":
+					if not read.is_reverse:
+						if not key in this_peak_usp_dictionary.keys():
+							this_peak_usp_dictionary[key] = (0,0)
+						peak_readID_list.append([peak[3], read.query_name])
+
+						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
+														 this_peak_usp_dictionary[key][1]+1)
+			this_peak_total_reads = sum([this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()])
+			duplicates_list = [this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()]
+			difference_list = []
+			if(len(duplicates_list) > 1):
+				for i in range(0,len(duplicates_list)-1):
+					difference_list.append(abs(duplicates_list[i] - duplicates_list[i+1]))
+			else:
+				difference_list = [-1]
+
+			duplicates_list.sort(reverse=True)
+
+			obed.write(peak[3] + "\t" + str(ibam_total_reads) + "\t" + str(this_peak_total_reads) + "\t" + str(len(this_peak_usp_dictionary.keys())) + ";" + ",".join(map(str, duplicates_list)) + "\t" + str(max(difference_list)) + "\t" + str(statistics.median(difference_list)) + "\t" + str(statistics.mean(difference_list)) + "\n") 
+		with open(output.peak_readID_list, 'w') as list:
+			for peak_read in peak_readID_list:
+				list.write("\t".join(peak_read) + "\n")
+		obed.close()
+		ibed.close()
+
+rule chimera:
+	input:
+		breakpoint_fa = "{sample}/{sample}_breakpoint.fa",
+		peak_seq = "{sample}/{sample}_peak_sequence.fa"
+	output:
+		chimera = "{sample}/{sample}_chimera.txt",
+		nonchimera = "{sample}/{sample}_nonchimera.txt",
+		misalignment = "{sample}/{sample}_misalignment.txt"
+	benchmark:
+		"benchmarks/run_chimera/{sample}.tsv"
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
+	group: "peaks"
+	run:
+		chimera_list = []
+		nonchimera_list = []
+		misalignment_list = []
+		with open(input.breakpoint_fa) as fa:
+			peak = fa.readline().strip("\n").strip(">")
+			seq = fa.readline().strip("\n").upper()
+			while(peak):
+				if "minus" in peak:
+					chimera = "A"
+				else:
+					chimera = "T"
+				overall_max = 0
+				i = 0	
+				while i < len(seq):
+					if seq[i] == chimera:
+						cur_max = 1
+						i = i+1
+						if i < len(seq):
+							while seq[i] == chimera:
+								cur_max = cur_max + 1
+								i = i + 1
+								if i == len(seq):
+									break
+						if cur_max > overall_max:
+							overall_max = cur_max
+					i = i+1
+				if overall_max > 12 or (seq.count(chimera) / len(seq)) >= 0.8:
+					chimera_list.append(peak)
+				else:
+					nonchimera_list.append(peak)
+				peak = fa.readline().strip("\n").strip(">")
+				seq = fa.readline().strip("\n").upper()
+
+		with open(input.peak_seq) as fa:
+			peak = fa.readline().strip("\n").strip(">")
+			seq = fa.readline().strip("\n").upper()
+			while(peak):
+				if "minus" in peak:
+					chimera = "A"
+				else:
+					chimera = "T"
+				if (seq.count(chimera)/ len(seq) > 0.5): 
+					misalignment_list.append(peak)
+				peak = fa.readline().strip("\n").strip(">")
+				seq = fa.readline().strip("\n").upper()
+				
+		with open(output.misalignment,'w') as mis:
+			mis.write("\n".join(misalignment_list))		
+		with open(output.chimera,'w') as chim:
+			chim.write("\n".join(chimera_list))
+		with open(output.nonchimera,'w') as nonchim:
+			nonchim.write("\n".join(nonchimera_list))
+
 rule chimera_hash:
 	input:
 		breakpoint_fa = "{sample}/{sample}_breakpoint.fa"
 	output:
 		chimera_hash = "{sample}/{sample}_chimera_hash.txt"
+	benchmark:
+		"benchmarks/run_chimera_hash/{sample}.tsv"
 	resources:
-		runtime = 10,
-		mem_mb = 100,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
+	group: "peaks"
 	run:
 		seqs = open(input.breakpoint_fa , 'r')
 		peak = seqs.readline().strip("\n").strip(">") 
@@ -444,20 +632,213 @@ rule chimera_hash:
 				peak = seqs.readline().strip("\n").strip(">")
 				seq = seqs.readline().strip("\n").upper()
 
+rule nearby_peak:
+	input:
+		peaks = "{sample}/{sample}_peaks.bed"
+	output:
+		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv"
+	benchmark:
+		"benchmarks/nearby_peak/{sample}.tsv"
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
+	group: "peaks"
+	shell:
+		"mergeBed -d 1000 -i {input.peaks} -c 4,5 -o collapse,collapse -delim \"=\" | "
+			"awk '$4 ~ \"=\"' | "
+			"awk '{{ OFS=\"\\t\"; split($5,a,\"=\"); split($4,b,\"=\"); max=0; stop=0; "
+				"for(i=0; i<length(a); i++) "
+					"{{split(a[i],d,\";\"); if(d[2] > max) {{max = d[2]; stop=i}} }} "
+					"print b[stop],$4 }}' "
+			"> {output.nearby_peaks} \n"
+
 rule segdup:
 	input:
 		peaks = "{sample}/{sample}_peaks.bed",
 		segdups = SEGDUPS
 	output:
 		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed"
+	benchmark:
+		"benchmarks/segdup/{sample}.tsv"
 	resources:
-		runtime = 10,
-		mem_mb = 500,
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
+	group: "peaks"
 	shell:
 		"bedtools intersect -wao -a {input.peaks} -b {input.segdups} | "
 			"bedtools merge -s -i stdin -c 4,10 -o distinct,collapse "
 			"> {output.segdup_intersect} \n"
-	
+				
+rule intersect_databases:
+	input:
+		peaks = "{sample}/{sample}_peaks.bed",
+		hg38 = HG38,  
+		Evrony_KR = EVRONY_KR,
+		repeat_masker = REPEAT_MASKER,
+		homopolymers = HOMOPOLYMERS,
+		i1kgp = I1KGP,
+		gnomad = GNOMAD,
+		nyuwa = NYUWA,
+		xtea = XTEA,
+		hgsvc3 = HGSVC3,
+		melt_lra = HGSVC3_MELT_LRA,
+		ont = ONT1019	
+	output:
+		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed"
+	benchmark:
+		"benchmarks/intersect_databases/{sample}.tsv"
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_intersect_databases_mem_mb
+	group: "peaks"
+	shell:
+		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
+			"RepeatMasker\tEvrony_KR\tHomopolymers\t"
+			"1000_Genomes_Project\tgnomAD\tNyuWa\txTea\tHGSVC3\tHGSVC3-MELT-LRA\t1019_ONT' "
+			"> {output.intersect_annotated} \n"
+		"bedtools intersect -S -wao -a {input.peaks} -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.repeat_masker}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$10\";\"$11\";\"$12}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6 -c 7 -o collapse | "
+			"bedtools intersect -S -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.Evrony_KR}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$11\";\"$12\";\"$13}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7 -c 8 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.homopolymers}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$12}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8 -c 9 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.i1kgp}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$13\";\"$14\";\"$15}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9 -c 10 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14\";\"$15}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10 -c 11 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.nyuwa}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$15\";\"$16}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11 -c 12 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.xtea}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$16\";\"$17\";\"$18}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12 -c 13 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.hgsvc3}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$17\";\"$18}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13 -c 14 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.melt_lra}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$18\";\"$19}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14 -c 15 -o collapse | "
+			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.ont}) | "
+			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$19}}' | "
+			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 -c 16 -o collapse "
+			">> {output.intersect_annotated} \n"
+		
+rule create_big_table:
+	input:
+		peaks = "{sample}/{sample}_peaks.bed",
+		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt",
+		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed",
+		chimera = "{sample}/{sample}_chimera.txt",
+		nonchimera = "{sample}/{sample}_nonchimera.txt",
+		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt",
+		Ntag_list = "{sample}/{sample}_Ntag_list.txt",
+		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
+		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
+		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
+		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
+		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt",
+		misalignment = "{sample}/{sample}_misalignment.txt"
+	output:
+		big_table = "{sample}/{sample}_big_table.tsv"
+	benchmark:
+		"benchmarks/run_big_table/{sample}.tsv"
+	resources:
+		runtime = get_create_big_table_runtime,
+		mem_mb = get_create_big_table_mem_mb
+	group: "classify"
+	run:
+		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
+		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
+		readIDs = readIDs.merge(Ntag, how="left", on="read")
+		del Ntag
+		polyA = pd.read_table(input.polyA_trimmed, sep="\t",header=None, names=["read"])
+		polyA["polyA"] = "pass_" + polyA['read']
+		readIDs = readIDs.merge(polyA, how="left", on="read").fillna('fail')
+		del polyA
+		gmotif = pd.read_table(input.pass_gmotif_list, sep="\t", header=None, names=["read"])
+		gmotif["gmotif"] = "pass_" + gmotif['read']
+		readIDs = readIDs.merge(gmotif, how="left", on="read").fillna('fail')
+		del gmotif
+		readIDs = readIDs.fillna('')
+		big_table = readIDs.groupby('peak_name').agg({'read': lambda x: len(list(set(x))),
+													  'Ntag': lambda x: ([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
+													  'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
+													  'gmotif': lambda x: len(list(set([y for y in x if y != "fail"])))}).reset_index()
+		del readIDs
+		peaks = pd.read_table(input.peaks, sep="\t", header=0)
+		big_table = peaks.merge(big_table, how="left", on="peak_name")
+		del peaks
+		chimera = pd.read_table(input.chimera, sep="\t", header=None, names=["peak_name"])
+		chimera['chimera'] = 'chimera'
+		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None, names=["peak_name"])
+		nonchimera['chimera'] = 'nonchimera'
+		chimeras = pd.concat([chimera, nonchimera])
+		misalignment = pd.read_table(input.misalignment, sep="\t", header=None, names=["peak_name"])
+		misalignment['misalignment'] = 'misalignment'
+		chimeras = chimeras.merge(misalignment, how="left", on=["peak_name"]).fillna("pass")
+		big_table = big_table.merge(chimeras, how="left", on="peak_name")
+		del chimera, chimeras, nonchimera, misalignment
+		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
+		big_table = big_table.merge(intersect[['peak_name', 'RepeatMasker', 'Evrony_KR', 'Homopolymers', 
+											   '1000_Genomes_Project', 'gnomAD', 'NyuWa', 'xTea', 
+											   'HGSVC3', 'HGSVC3-MELT-LRA', '1019_ONT']], 
+											   how="left", on="peak_name")
+		del intersect  
+		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
+		usp.columns = usp.columns.str.strip("#")
+		big_table = big_table.merge(usp, how="left", on="peak_name")
+		del usp
+		big_table["RPM"] = (big_table['num_peak_reads'] / (big_table['num_bam_reads'])) * 1000000
+		nearby_peak = pd.read_table(input.nearby_peaks, sep="\t", names=['nearest_peak','peak_name'])
+		nearby_peak['peak_name'] = nearby_peak['peak_name'].str.split(pat="=")
+		nearby_peak = nearby_peak.explode('peak_name')
+		big_table = big_table.merge(nearby_peak, how="left", on="peak_name")
+		del nearby_peak
+		segdups = pd.read_table(input.segdup_intersect, sep="\t", names=['chr','start','end','peak_name','SegDup'])
+		big_table = big_table.merge(segdups[['peak_name','SegDup']], how="left", on="peak_name")
+		del segdups
+		max_depth_distance = pd.read_table(input.max_depth,sep="\t", header=None, names=['peak_name','distance'] ) 
+		big_table = big_table.merge(max_depth_distance, how="left", on="peak_name")
+		del max_depth_distance 
+		big_table = big_table.replace(r',{2,}', '', regex=True)
+
+		big_table.to_csv(output.big_table, sep="\t", index=False, header=True, na_rep="")
+
+rule filter_and_classify:
+	input:
+		big_table = "{sample}/{sample}_big_table.tsv",
+	output:
+		filter_reasons = "{sample}/{sample}_big_table_filter_reasons.tsv",
+		candidate_peaks = "{sample}/{sample}_candidate_peaks.tsv",
+		plots = "{sample}/{sample}_filtering_plots.pdf",
+		igv_script = "{sample}/{sample}_igv.sh",
+		summary_file = "{sample}/{sample}_summary.txt"
+	benchmark:
+		"benchmarks/filter_and_classify/{sample}.tsv"
+	params: 
+		error_prone = lambda wildcards: SAMPLES.loc[wildcards.sample]["error_prone"], # optional 
+		truth_set = lambda wildcards: SAMPLES.loc[wildcards.sample]["truth_set"], # optional 
+		hg38 = HG38, # optional 
+		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
+	conda:
+		"envs/plotR.yml"
+	resources: 
+		runtime = get_filter_and_classify_runtime,
+		mem_mb = get_filter_and_classify_mem_mb,
+	group: "classify"
+	shell:
+		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
+			"{input.big_table} {LIBRARY} {output.plots} {output.candidate_peaks} {output.summary_file} "
+			"{params.error_prone} {params.truth_set} {params.hg38} \n"
+		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.candidate_peaks} | "
+			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
+			"> {output.igv_script}"
+
 rule map_transduction_fasta:
 	input:
 		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv",
@@ -481,14 +862,16 @@ rule map_transduction_fasta:
 		hardclip3p_bed = "{sample}/{sample}_hardclip_3p.bed",
         hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed",
 		peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt"
+	benchmark:
+		"benchmarks/map_transduction_fasta/{sample}.tsv"
 	params:
 		adapter_T = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
 		min_length = 10,
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
 	threads: 8
 	resources:
-		runtime = 60,
-		mem_mb = 2000,
+		runtime = get_map_transduction_fasta_runtime,
+		mem_mb = get_map_transduction_fasta_mem_mb,
 	shell:
 		"set -x \n"
 
@@ -561,315 +944,6 @@ rule map_transduction_fasta:
 			"-b {output.transduction_bed} "
 			"> {output.hardclip5p_bed} \n"		
 
-rule junction_spanning:
-	input:
-		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
-	output:
-		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt"
-	params:
-		max_err = 0,
-		adapter_T = "TTTTTTTT" 
-	resources:
-		runtime = 10,
-		mem_mb = lambda wildcards, input: input.size_mb,
-	shell:
-		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
-			"{input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
-			"seqkit seq -i -n - "
-			"> {output.polyA_trimmed} \n"
-
-rule count_templates:
-	input:
-		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
-		peaks = "{sample}/{sample}_peaks.bed"
-	output:
-		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
-		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt"
-	resources:
-		runtime = 15,
-		mem_mb = lambda wildcards, input: 6 * input.size_mb,
-	run:
-		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
-		ibed=open(input.peaks, 'r')
-		obed=open(output.unique_start_positions, 'w')
-		header = ["#peak_name", "num_bam_reads", "num_peak_reads", "num_usp;depth", 
-				  "max_neighbor_difference", "median_neighbor_difference", "mean_neighbor_difference"]
-		obed.write("\t".join(header) + "\n")
-		ibam_total_reads = sum([i[3] for i in ibam.get_index_statistics()])
-		peak_readID_list = []
-		for peak_line in ibed:
-			if peak_line.startswith("#"):
-				continue
-			peak = peak_line.strip().split("\t")
-			peak_iter = ibam.fetch(peak[0], int(peak[1]), int(peak[2]))
-			this_peak_usp_dictionary = {}
-			for read in peak_iter:
-				if read.is_reverse:
-					key = read.reference_name + ":" + str(read.reference_end)
-				else:
-					key = read.reference_name + ":" + str(read.reference_start)
-
-				if peak[5] == "-":
-					if read.is_reverse:
-						if not key in this_peak_usp_dictionary.keys():
-							this_peak_usp_dictionary[key] = (0,0)
-						peak_readID_list.append([peak[3], read.query_name])
-
-						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-														 this_peak_usp_dictionary[key][1]+1)
-				elif peak[5] == "+":
-					if not read.is_reverse:
-						if not key in this_peak_usp_dictionary.keys():
-							this_peak_usp_dictionary[key] = (0,0)
-						peak_readID_list.append([peak[3], read.query_name])
-
-						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-														 this_peak_usp_dictionary[key][1]+1)
-			this_peak_total_reads = sum([this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()])
-			duplicates_list = [this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()]
-			difference_list = []
-			if(len(duplicates_list) > 1):
-				for i in range(0,len(duplicates_list)-1):
-					difference_list.append(abs(duplicates_list[i] - duplicates_list[i+1]))
-			else:
-				difference_list = [-1]
-
-			duplicates_list.sort(reverse=True)
-
-			obed.write(peak[3] + "\t" + str(ibam_total_reads) + "\t" + str(this_peak_total_reads) + "\t" + str(len(this_peak_usp_dictionary.keys())) + ";" + ",".join(map(str, duplicates_list)) + "\t" + str(max(difference_list)) + "\t" + str(statistics.median(difference_list)) + "\t" + str(statistics.mean(difference_list)) + "\n") 
-		with open(output.peak_readID_list, 'w') as list:
-			for peak_read in peak_readID_list:
-				list.write("\t".join(peak_read) + "\n")
-		obed.close()
-		ibed.close()
-
-rule chimera:
-	input:
-		breakpoint_fa = "{sample}/{sample}_breakpoint.fa",
-		peak_seq = "{sample}/{sample}_peak_sequence.fa"
-	output:
-		chimera = "{sample}/{sample}_chimera.txt",
-		nonchimera = "{sample}/{sample}_nonchimera.txt",
-		misalignment = "{sample}/{sample}_misalignment.txt"
-	resources:
-		runtime = 10,
-		mem_mb = 100,
-	run:
-		chimera_list = []
-		nonchimera_list = []
-		misalignment_list = []
-		with open(input.breakpoint_fa) as fa:
-			peak = fa.readline().strip("\n").strip(">")
-			seq = fa.readline().strip("\n").upper()
-			while(peak):
-				if "minus" in peak:
-					chimera = "A"
-				else:
-					chimera = "T"
-				overall_max = 0
-				i = 0	
-				while i < len(seq):
-					if seq[i] == chimera:
-						cur_max = 1
-						i = i+1
-						if i < len(seq):
-							while seq[i] == chimera:
-								cur_max = cur_max + 1
-								i = i + 1
-								if i == len(seq):
-									break
-						if cur_max > overall_max:
-							overall_max = cur_max
-					i = i+1
-				if overall_max > 12 or (seq.count(chimera) / len(seq)) >= 0.8:
-					chimera_list.append(peak)
-				else:
-					nonchimera_list.append(peak)
-				peak = fa.readline().strip("\n").strip(">")
-				seq = fa.readline().strip("\n").upper()
-
-		with open(input.peak_seq) as fa:
-			peak = fa.readline().strip("\n").strip(">")
-			seq = fa.readline().strip("\n").upper()
-			while(peak):
-				if "minus" in peak:
-					chimera = "A"
-				else:
-					chimera = "T"
-				if (seq.count(chimera)/ len(seq) > 0.5): 
-					misalignment_list.append(peak)
-				peak = fa.readline().strip("\n").strip(">")
-				seq = fa.readline().strip("\n").upper()
-				
-		with open(output.misalignment,'w') as mis:
-			mis.write("\n".join(misalignment_list))		
-		with open(output.chimera,'w') as chim:
-			chim.write("\n".join(chimera_list))
-		with open(output.nonchimera,'w') as nonchim:
-			nonchim.write("\n".join(nonchimera_list))
-						
-rule intersect_databases:
-	input:
-		peaks = "{sample}/{sample}_peaks.bed",
-		hg38 = HG38,  
-		Evrony_KR = EVRONY_KR,
-		repeat_masker = REPEAT_MASKER,
-		homopolymers = HOMOPOLYMERS,
-		i1kgp = IKGP,
-		gnomad = GNOMAD,
-		nyuwa = NYUWA,
-		xTea = XTEA	
-	output:
-		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed"
-	resources:
-		runtime = 10,
-		mem_mb = 3000,
-	shell:
-		"echo '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand\t"
-			"Repeat_masker\tEvrony_KR\tHomopolymers\tGnomad\t1000_Genomes_Project\tNyuwa\txTea' "
-			"> {output.intersect_annotated} \n"
-		"bedtools intersect -S -wao -a {input.peaks} -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.repeat_masker}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$10\";\"$11\";\"$12}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6 -c 7 -o collapse | "
-			"bedtools intersect -S -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.Evrony_KR}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$11\";\"$12\";\"$13}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7 -c 8 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -l 0 -r 500 -s -i {input.homopolymers}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$12}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8 -c 9 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.gnomad}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$13\";\"$14\";\"$15}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9 -c 10 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.i1kgp}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14\";\"$15\";\"$16}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10 -c 11 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.nyuwa}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$15\";\"$16\";\"$17}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11 -c 12 -o collapse | "
-			"bedtools intersect -wao -a stdin -b <(slopBed -g {input.hg38} -b 500 -s -i {input.xTea}) | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$16\";\"$17\";\"$18}}' | "
-			"bedtools groupby -grp 1,2,3,4,5,6,7,8,9,10,11,12 -c 13 -o collapse "
-			">> {output.intersect_annotated} \n"
-
-rule nearby_peak:
-	input:
-		peaks = "{sample}/{sample}_peaks.bed"
-	output:
-		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv"
-	resources:
-		runtime = 10,
-		mem_mb = 500,
-	shell:
-		"mergeBed -d 1000 -i {input.peaks} -c 4,5 -o collapse,collapse -delim \"=\" | "
-			"awk '$4 ~ \"=\"' | "
-			"awk '{{ OFS=\"\\t\"; split($5,a,\"=\"); split($4,b,\"=\"); max=0; stop=0; "
-				"for(i=0; i<length(a); i++) "
-					"{{split(a[i],d,\";\"); if(d[2] > max) {{max = d[2]; stop=i}} }} "
-					"print b[stop],$4 }}' "
-			"> {output.nearby_peaks} \n"	
-		
-rule create_big_table:
-	input:
-		peaks = "{sample}/{sample}_peaks.bed",
-		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt",
-		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed",
-		chimera = "{sample}/{sample}_chimera.txt",
-		nonchimera = "{sample}/{sample}_nonchimera.txt",
-		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt",
-		Ntag_list = "{sample}/{sample}_Ntag_list.txt",
-		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
-		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
-		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
-		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt",
-		misalignment = "{sample}/{sample}_misalignment.txt"
-	output:
-		big_table = "{sample}/{sample}_big_table.tsv"
-	resources:
-		runtime = 20,
-		mem_mb = lambda wildcards, input: 4 * input.size_mb,
-	run:
-		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
-		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
-		readIDs = readIDs.merge(Ntag, how="left", on="read")
-		del Ntag
-		polyA = pd.read_table(input.polyA_trimmed, sep="\t",header=None, names=["read"])
-		polyA["polyA"] = "pass_" + polyA['read']
-		readIDs = readIDs.merge(polyA, how="left", on="read").fillna('fail')
-		del polyA
-		gmotif = pd.read_table(input.pass_gmotif_list, sep="\t", header=None, names=["read"])
-		gmotif["gmotif"] = "pass_" + gmotif['read']
-		readIDs = readIDs.merge(gmotif, how="left", on="read").fillna('fail')
-		del gmotif
-		readIDs = readIDs.fillna('')
-		big_table = readIDs.groupby('peak_name').agg({'read': lambda x: len(list(set(x))),
-													  'Ntag': lambda x: ([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
-													  'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
-													  'gmotif': lambda x: len(list(set([y for y in x if y != "fail"])))}).reset_index()
-		del readIDs
-		peaks = pd.read_table(input.peaks, sep="\t", header=0)
-		big_table = peaks.merge(big_table, how="left", on="peak_name")
-		del peaks
-		chimera = pd.read_table(input.chimera, sep="\t", header=None,names=["peak_name"])
-		chimera['chimera'] = 'chimera'
-		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None,names=["peak_name"])
-		nonchimera['chimera'] = 'nonchimera'
-		chimeras = pd.concat([chimera, nonchimera])
-		misalignment = pd.read_table(input.misalignment, sep="\t",header=None,names=["peak_name"])
-		misalignment['misalignment'] = 'misalignment'
-		chimeras = chimeras.merge(misalignment, how="left", on=["peak_name"]).fillna("pass")
-		big_table = big_table.merge(chimeras, how="left", on="peak_name")
-		del chimera, chimeras, nonchimera, misalignment
-		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
-		big_table = big_table.merge(intersect[['peak_name', 'Repeat_masker', 'Evrony_KR', 'Homopolymers', 
-											   'Gnomad','1000_Genomes_Project', 'Nyuwa','xTea']], how="left", on="peak_name")
-		del intersect  
-		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
-		usp.columns = usp.columns.str.strip("#")
-		big_table = big_table.merge(usp, how="left", on="peak_name")
-		del usp
-		big_table["RPM"] = (big_table['num_peak_reads'] / (big_table['num_bam_reads'])) * 1000000
-		nearby_peak = pd.read_table(input.nearby_peaks, sep="\t", names=['nearest_peak','peak_name'])
-		nearby_peak['peak_name'] = nearby_peak['peak_name'].str.split(pat="=")
-		nearby_peak = nearby_peak.explode('peak_name')
-		big_table = big_table.merge(nearby_peak, how="left", on="peak_name")
-		del nearby_peak
-		segdups = pd.read_table(input.segdup_intersect, sep="\t", names=['chr','start','end','peak_name','SegDup'])
-		big_table = big_table.merge(segdups[['peak_name','SegDup']], how="left", on="peak_name")
-		del segdups
-		max_depth_distance = pd.read_table(input.max_depth,sep="\t", header=None, names=['peak_name','distance'] ) 
-		big_table = big_table.merge(max_depth_distance, how="left", on="peak_name")
-		del max_depth_distance 
-		big_table = big_table.replace(r',{2,}', '', regex=True)
-
-		big_table.to_csv(output.big_table, sep="\t", index=False, header=True, na_rep="")
-
-rule filter_and_classify:
-	input:
-		big_table = "{sample}/{sample}_big_table.tsv",
-	output:
-		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv",
-		plots = "{sample}/{sample}_filtering_plots.pdf",
-		igv_script = "{sample}/{sample}_igv.sh",
-		summary_file = "{sample}/{sample}_summary.txt"
-	params: 
-		error_prone = lambda wildcards: SAMPLES.loc[wildcards.sample]["error_prone"], # optional 
-		truth_set = lambda wildcards: SAMPLES.loc[wildcards.sample]["truth_set"], # optional 
-		hg38 = HG38, # optional 
-		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
-	conda:
-		"envs/plotR.yml"
-	resources: 
-		runtime = 10,
-		mem_mb = 1000,
-	shell:
-		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {LIBRARY} {output.plots} {output.filtered_peaks} {output.summary_file} "
-			"{params.error_prone} {params.truth_set} {params.hg38} \n"
-		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.filtered_peaks} | "
-			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
-			"> {output.igv_script}"
-
 rule transduction_big_table: 
 	input:
 		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt",
@@ -880,9 +954,11 @@ rule transduction_big_table:
 		peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt",
 	output:
 		transduction_big_table = "{sample}/{sample}_transduction_big_table.tsv"
+	benchmark:
+		"benchmarks/run_transduction_big_table/{sample}.tsv"
 	resources:
-		runtime = 20,
-		mem_mb = lambda wildcards, input: 3 * input.size_mb,
+		runtime = get_transduction_big_table_runtime,
+		mem_mb = get_transduction_big_table_mem_mb
 	run:
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed, sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
@@ -918,11 +994,13 @@ rule call_transductions:
 	output:
 		transduction_plots = "{sample}/{sample}_transduction_plots.pdf",
 		filtered_transduction = "{sample}/{sample}_filtered_transduction.tsv"
+	benchmark:
+		"benchmarks/call_transductions/{sample}.tsv"
 	conda:
 		"envs/plotR.yml"
 	resources:
-		runtime = 10, 
-		mem_mb = 1000,
+		runtime = get_min_runtime, 
+		mem_mb = get_call_transductions_mem_mb,
 	shell:
 		"Rscript {workflow.basedir}/scripts/transduction_calling.R "
 			"{input.transduction_big_table} {LIBRARY} {output.transduction_plots} "
