@@ -4,8 +4,10 @@
 *__pycache__
 !config/*.yml
 !config/*.tsv
+!reference
 !scripts
 !setup
 !workflow
 !README.md
+!.gitattributes
 !.gitignore
