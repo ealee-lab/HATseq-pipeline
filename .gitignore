@@ -2,12 +2,12 @@
 *.err
 *.out
 *__pycache__
-!config/*.yml
-!config/*.tsv
+!config
 !reference
 !scripts
 !setup
 !workflow
+workflow/notebooks
 !README.md
 !.gitattributes
 !.gitignore

@@ -1,0 +1,29 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: entries for the sample sheet
+properties:
+  sample_name:
+    type: string
+    description: sample name/identifier
+  raw_fastq1:
+    type: string
+    description: path to read 1
+  raw_fastq2:
+    type: string
+    description: path to read 2
+  index_seq:
+    type: string
+    description: 4 bp in-line index used during library prep 
+  error_prone:
+    type: string
+    default: "-NA-"
+    description: path to .bed file of error-prone regions
+  truth_set:
+    type: string
+    default: "-NA-"
+    description: path to .bed file of true insertions
+
+required:
+  - sample_name
+  - raw_fastq1
+  - raw_fastq2
+  - index_seq

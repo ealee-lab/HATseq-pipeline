@@ -1,0 +1,34 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: main configuration schema for the workflow
+properties:
+  metadata:
+    type: string
+    description: path to sample-sheet TSV file
+  te_name:
+    type: string
+    default: "L1HS"
+    description: name of TE being analyzed
+  bwa_ref_genome:
+    type: string
+    description: path to reference genome
+  reference_dir:
+    type: string
+    description: path to directory with annotation files
+  library:
+    type: string
+    description: library type (bulk, single, microbulk)
+  sequencing_platform:
+    type: string
+    description: sequencing platform used 
+  sequencing_center:
+    type: string
+    description: sequencing_center used
+
+required:
+  - metadata
+  - te_name
+  - bwa_ref_genome
+  - reference_dir
+  - library
+  - sequencing_platform
+  - sequencing_center
