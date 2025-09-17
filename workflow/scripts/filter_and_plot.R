@@ -13,12 +13,12 @@ args<-commandArgs(TRUE)
 big_table_file <- args[1]
 library <- args[2]
 plots_path <- args[3]
-candidate_peaks <- args[4]
+classified_peaks <- args[4]
 summary <- args[5]
 error_prone <- args[6]
 truth_set <- args[7]
 genome <- args[8]
-big_table_filter_annotation_file <- paste0(sub("_candidate_peaks.tsv$", "", candidate_peaks),
+big_table_filter_annotation_file <- paste0(sub("_classified_peaks.bed$", "", classified_peaks),
                                                "_big_table_filter_reasons.tsv")
 
 # Read input and define columns
@@ -379,15 +379,13 @@ filter_RPM
 dev.off()
 
 # Candidate table
-candidate_cols = c("chrm","start","end","peak","RPM","strand",
-                  "classification","filter_reason",
-                  "repeatmasker","SegDups","gmotif_percent","usp","polyA_percent")
+bed_cols = c("chrm","start","end","peak","RPM","strand","classification","filter_reason")
 
 if (truth_set != "-NA-") {
-  candidate_table <- big_table[big_table$candidate, c(candidate_cols, "true_insertion_ID")]
+  peak_table <- big_table[, c(bed_cols, "true_insertion_ID")]
 } else {
-  candidate_table <- big_table[big_table$candidate, candidate_cols]
+  peak_table <- big_table[, bed_cols]
 }
 
-write.table(candidate_table, candidate_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
+write.table(peak_table, classified_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
 write.table(big_table[, lapply(big_table, class) != "list"], big_table_filter_annotation_file, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")

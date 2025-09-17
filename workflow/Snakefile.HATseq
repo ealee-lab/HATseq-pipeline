@@ -58,7 +58,7 @@ rule HATseq:
 		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_unique_start_positions.bed",
 		"{sample}/{sample}_nonchimera.txt",
-		#"{sample}/{sample}_custom_transduction.fasta",
+		"{sample}/{sample}_custom_transduction.fasta",
 		"{sample}/{sample}_polyA_trimmed.txt",
 		"{sample}/{sample}_chimera_hash.txt",
 		"{sample}/{sample}_big_table.tsv",
@@ -820,7 +820,7 @@ rule filter_and_classify:
 		big_table = "{sample}/{sample}_big_table.tsv",
 	output:
 		filter_reasons = "{sample}/{sample}_big_table_filter_reasons.tsv",
-		candidate_peaks = "{sample}/{sample}_candidate_peaks.tsv",
+		classified_peaks = "{sample}/{sample}_classified_peaks.bed",
 		plots = "{sample}/{sample}_filtering_plots.pdf",
 		igv_script = "{sample}/{sample}_igv.sh",
 		summary_file = "{sample}/{sample}_summary.txt"
@@ -839,15 +839,16 @@ rule filter_and_classify:
 	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {LIBRARY} {output.plots} {output.candidate_peaks} {output.summary_file} "
+			"{input.big_table} {LIBRARY} {output.plots} {output.classified_peaks} {output.summary_file} "
 			"{params.error_prone} {params.truth_set} {params.hg38} \n"
-		"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' {output.candidate_peaks} | "
+		"grep -E 'UNK|SOM' {output.classified_peaks} | "
+			"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
 			"> {output.igv_script}"
 
 rule map_transduction_fasta:
 	input:
-		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv",
+		classified_peaks = "{sample}/{sample}_classified_peaks.tsv",
 		L1HS_decoy = L1HS_DECOY,
 		ref_genome = REF_GENOME,
 		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz",
@@ -867,7 +868,7 @@ rule map_transduction_fasta:
 		softclip5p_trimmed_bed = "{sample}/{sample}_softclip_5p_trimmed.bed",
 		hardclip3p_bed = "{sample}/{sample}_hardclip_3p.bed",
         hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed",
-		peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt"
+		#peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt"
 	benchmark:
 		"benchmarks/map_transduction_fasta/{sample}.tsv"
 	params:
@@ -881,11 +882,10 @@ rule map_transduction_fasta:
 	shell:
 		"set -x \n"
 
-		"cat {input.filtered_peaks} | "
-			"awk '{{print $1,$2,$3,$4}}' | "
+		"awk -v OFS='\t' '{{if ($7 != 'FP') print $1,$2,$3,$4}}' {input.classified_peaks} | "
 			"sort -k1,1 -k2,2n | "
 			"bedtools merge -i stdin -c 4 -o collapse | "
-			"awk '{{OFS=\"\\t\"; print $1,$2,$3,\"{wildcards.sample}_custom_reference_\"NR, $4}}' "
+			"awk -v OFS='\t' '{{print $1,$2,$3,\"{wildcards.sample}_custom_reference_\"NR,$4}}' "
 			"> {output.transduction_bed} \n"
 
 		# Everything is with respect to the reference at this point, fasta of loci and fasta of softclipped reads
@@ -902,6 +902,7 @@ rule map_transduction_fasta:
 			"-o {output.softclip5p_trimmed_fasta} "
 			"{input.softclip5p_fasta} "
 			">> {input.cutadapt_report} \n"
+
 		"bwa mem -t {threads} {params.RG_ID} {output.transduction_fasta} {output.softclip3p_trimmed_fasta} | "
 			"samtools sort -o {output.softclip3p_trimmed_bam}  \n"
 		"bwa mem -t {threads} {params.RG_ID} {output.transduction_fasta} {output.softclip5p_trimmed_fasta} | "
@@ -939,8 +940,8 @@ rule map_transduction_fasta:
 			"bamToBed -i stdin > "
 			"{output.softclip5p_trimmed_bed} \n"
 		
-		"bedtools intersect -wa -wb -a {input.filtered_peaks} -b {output.transduction_bed} | cut -f 4,10 "
-			"> {output.peak_custompeak_list} \n"	
+		#"bedtools intersect -wa -wb -a {input.classified_peaks} -b {output.transduction_bed} | cut -f 4,10 "
+		#	"> {output.peak_custompeak_list} \n"	
 		"bedtools intersect -wa -wb "
 			"-a <(awk '{{OFS=\"\\t\"; split($2,a,\":\"); split(a[2],b,\"-\"); print a[1],b[1],b[2],$1,\".\",a[3]}}' {input.hardclip3p_table}) "
 			"-b {output.transduction_bed} "
@@ -957,7 +958,8 @@ rule transduction_big_table:
 		hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed",
 		softclip3p_trimmed_bed = "{sample}/{sample}_softclip_3p_trimmed.bed",
 		softclip5p_trimmed_bed = "{sample}/{sample}_softclip_5p_trimmed.bed",
-		peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt",
+		transduction_bed =  "{sample}/{sample}_custom_transduction.bed",
+		#peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt",
 	output:
 		transduction_big_table = "{sample}/{sample}_transduction_big_table.tsv"
 	benchmark:
@@ -986,7 +988,9 @@ rule transduction_big_table:
 													  '5p_hard_clip': lambda x: ','.join(list(set(x))),
 													  '3p_hard_clip': lambda x: ','.join(list(set(x)))}).reset_index()
 		del readIDs
-		custom_ref_peak = pd.read_table(input.peak_custompeak_list, sep="\t", names=["peak_name","custom_ref_peak"])
+		custom_ref_peak = pd.read_table(input.transduction_bed, sep="\t", usecols=[3,4], names=["custom_ref_peak","peak_name"])
+		custom_ref_peak["peak_name"] = custom_ref_peak["peak_name"].str.split(",")
+		custom_ref_peak = custom_ref_peak.explode("peak_name")
 		big_table = big_table.merge(custom_ref_peak, how="left", on="peak_name")
 		del custom_ref_peak
 		big_table = big_table.replace(r',{2,}', '', regex=True)
