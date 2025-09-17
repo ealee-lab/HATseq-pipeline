@@ -834,7 +834,7 @@ rule filter_and_classify:
 	conda:
 		"envs/plotR.yml"
 	resources: 
-		runtime = get_filter_and_classify_runtime,
+		runtime = get_min_runtime,
 		mem_mb = get_filter_and_classify_mem_mb,
 	group: "classify"
 	shell:
