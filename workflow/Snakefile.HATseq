@@ -7,22 +7,28 @@ import re
 import gzip
 import pysam
 import numpy as np 
-import re
 import math
-import gzip 
 import statistics
+from snakemake.utils import validate
 
 # Load helper functions
 include: "rules/common.smk"
 
 # Read config variables as constants
-SAMPLES = pd.read_csv(config["samples"], sep="\t", dtype=str).set_index("sample_name")
+SAMPLES = pd.read_csv(config["metadata"], sep="\t", dtype=str).set_index("sample_name", drop=False)
 TE_NAME = config["te_name"]
 REF_GENOME = config["bwa_ref_genome"]
 REFERENCE_DIR = config["reference_dir"]
 LIBRARY = config["library"]
 SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
+
+# Validate configuration
+config_schema = os.path.join(os.path.dirname(workflow.basedir), "config", "schemas", "config.schema.yml")
+sample_schema = os.path.join(os.path.dirname(workflow.basedir), "config", "schemas", "samples.schema.yml")
+
+validate(config, config_schema)
+validate(SAMPLES, sample_schema)
 
 # Create reference file constants
 EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
