@@ -50,19 +50,19 @@ localrules: HATseq # do not submit target rule as separate job
 rule HATseq:
 	input:
 		expand([
-		"{sample}/{sample}_peaks.bed",
-		"{sample}/{sample}_cutadapt_report.txt",
-		"{sample}/{sample}_hardclip_5p.tsv",
-		"{sample}/{sample}_pass_gmotif_list.txt",
+		"{sample}/{sample}_mappable_R1_list.txt",
+		"{sample}/{sample}_peak_sorted_bwa.bam",
 		"{sample}/{sample}_Ntag_list.txt",
-		"{sample}/{sample}_intersect_annotated.bed",
-		"{sample}/{sample}_unique_start_positions.bed",
-		"{sample}/{sample}_nonchimera.txt",
-		"{sample}/{sample}_custom_transduction.fasta",
+		"{sample}/{sample}_pass_gmotif_list.txt",
 		"{sample}/{sample}_polyA_trimmed.txt",
+		"{sample}/{sample}_peaks.bed",
+		"{sample}/{sample}_unique_start_positions.bed",
 		"{sample}/{sample}_chimera_hash.txt",
+		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_big_table.tsv",
-		"{sample}/{sample}_candidate_peaks.tsv"
+		"{sample}/{sample}_classified_peaks.bed",
+		"{sample}/{sample}_custom_transduction.fasta",
+		"{sample}/{sample}_transduction_plots.pdf",
 		],
 		sample=SAMPLES.index) 
 
@@ -848,7 +848,7 @@ rule filter_and_classify:
 
 rule map_transduction_fasta:
 	input:
-		classified_peaks = "{sample}/{sample}_classified_peaks.tsv",
+		classified_peaks = "{sample}/{sample}_classified_peaks.bed",
 		L1HS_decoy = L1HS_DECOY,
 		ref_genome = REF_GENOME,
 		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz",
@@ -867,22 +867,22 @@ rule map_transduction_fasta:
 		softclip3p_trimmed_bed = "{sample}/{sample}_softclip_3p_trimmed.bed",
 		softclip5p_trimmed_bed = "{sample}/{sample}_softclip_5p_trimmed.bed",
 		hardclip3p_bed = "{sample}/{sample}_hardclip_3p.bed",
-        hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed",
-		#peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt"
+		hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed"
 	benchmark:
 		"benchmarks/map_transduction_fasta/{sample}.tsv"
 	params:
 		adapter_T = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
 		min_length = 10,
 		RG_ID = lambda wildcards: fr"-R '@RG\tID:{TE_NAME}\tSM:{wildcards.sample}\tPL:{SEQ_PLATFORM}\tLB:HAT-seq\tCN:{SEQ_CENTER}'"
-	threads: 8
+	threads: 4
 	resources:
 		runtime = get_map_transduction_fasta_runtime,
 		mem_mb = get_map_transduction_fasta_mem_mb,
+	group: "transduction"
 	shell:
 		"set -x \n"
 
-		"awk -v OFS='\t' '{{if ($7 != 'FP') print $1,$2,$3,$4}}' {input.classified_peaks} | "
+		"awk -v OFS='\t' 'NR > 1 {{if ($7 != 'FP') print $1,$2,$3,$4}}' {input.classified_peaks} | "
 			"sort -k1,1 -k2,2n | "
 			"bedtools merge -i stdin -c 4 -o collapse | "
 			"awk -v OFS='\t' '{{print $1,$2,$3,\"{wildcards.sample}_custom_reference_\"NR,$4}}' "
@@ -940,8 +940,6 @@ rule map_transduction_fasta:
 			"bamToBed -i stdin > "
 			"{output.softclip5p_trimmed_bed} \n"
 		
-		#"bedtools intersect -wa -wb -a {input.classified_peaks} -b {output.transduction_bed} | cut -f 4,10 "
-		#	"> {output.peak_custompeak_list} \n"	
 		"bedtools intersect -wa -wb "
 			"-a <(awk '{{OFS=\"\\t\"; split($2,a,\":\"); split(a[2],b,\"-\"); print a[1],b[1],b[2],$1,\".\",a[3]}}' {input.hardclip3p_table}) "
 			"-b {output.transduction_bed} "
@@ -959,7 +957,6 @@ rule transduction_big_table:
 		softclip3p_trimmed_bed = "{sample}/{sample}_softclip_3p_trimmed.bed",
 		softclip5p_trimmed_bed = "{sample}/{sample}_softclip_5p_trimmed.bed",
 		transduction_bed =  "{sample}/{sample}_custom_transduction.bed",
-		#peak_custompeak_list = "{sample}/{sample}_peak_custompeak_list.txt",
 	output:
 		transduction_big_table = "{sample}/{sample}_transduction_big_table.tsv"
 	benchmark:
@@ -967,6 +964,7 @@ rule transduction_big_table:
 	resources:
 		runtime = get_transduction_big_table_runtime,
 		mem_mb = get_transduction_big_table_mem_mb
+	group: "transduction"
 	run:
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 		soft3p = pd.read_table(input.softclip3p_trimmed_bed, sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
@@ -975,10 +973,10 @@ rule transduction_big_table:
 		soft5p = pd.read_table(input.softclip5p_trimmed_bed, sep="\t", header=None, names=["5p_soft_clip","start_s5p","end_s5p","read","mapq_s5p","strand_s5p"])
 		readIDs = readIDs.merge(soft5p[["read","5p_soft_clip"]], how="left", on="read")
 		del soft5p 
-		hard5p = pd.read_table(input.hardclip5p_bed, sep="\t", header=None,names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","5p_hard_clip","peaks"])
+		hard5p = pd.read_table(input.hardclip5p_bed, sep="\t", header=None, names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","5p_hard_clip","peaks"])
 		readIDs = readIDs.merge(hard5p[["read","5p_hard_clip"]], how="left", on="read")
 		del hard5p 
-		hard3p = pd.read_table(input.hardclip3p_bed, sep="\t", header=None,names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","3p_hard_clip","peaks"])
+		hard3p = pd.read_table(input.hardclip3p_bed, sep="\t", header=None, names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","3p_hard_clip","peaks"])
 		readIDs = readIDs.merge(hard3p[["read","3p_hard_clip"]], how="left", on="read")
 		del hard3p 
 		readIDs = readIDs.fillna('')
@@ -994,13 +992,14 @@ rule transduction_big_table:
 		big_table = big_table.merge(custom_ref_peak, how="left", on="peak_name")
 		del custom_ref_peak
 		big_table = big_table.replace(r',{2,}', '', regex=True)
+		big_table = big_table.replace(r'^,', '', regex=True)
 		big_table.to_csv(output.transduction_big_table, sep="\t", index=False, header=True, na_rep="")
 
 rule call_transductions: 
 	input: 
 		transduction_bed = "{sample}/{sample}_custom_transduction.bed", 
 		transduction_big_table = "{sample}/{sample}_transduction_big_table.tsv", 
-		filtered_peaks = "{sample}/{sample}_filtered_peaks.tsv"
+		classified_peaks = "{sample}/{sample}_classified_peaks.bed"
 	output:
 		transduction_plots = "{sample}/{sample}_transduction_plots.pdf",
 		filtered_transduction = "{sample}/{sample}_filtered_transduction.tsv"
@@ -1013,6 +1012,6 @@ rule call_transductions:
 		mem_mb = get_call_transductions_mem_mb,
 	shell:
 		"Rscript {workflow.basedir}/scripts/transduction_calling.R "
-			"{input.transduction_big_table} {LIBRARY} {output.transduction_plots} "
-			"{output.filtered_transduction} {input.transduction_bed} {input.filtered_peaks} \n"
+			"{input.transduction_big_table} {output.transduction_plots} "
+			"{output.filtered_transduction} {input.transduction_bed} {input.classified_peaks} \n"
 	

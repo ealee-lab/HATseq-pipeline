@@ -239,22 +239,24 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 #   ylab("Peak Count") + 
 #   xlab("Peak RPM / Largest Nearby Peak RPM")
 
-# filter_templates <- ggplot(big_table, aes(x=number_templates, group=classification, color=classification, fill=classification)) +
-#   geom_histogram(binwidth=3) +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   geom_vline(xintercept = 3, color = "red", linetype = "dashed", size = 1) +
-#   annotate("text", x = 70, y = .5*nrow(big_table), label = "Threshold \n 3", color = "red", angle = 0, vjust = -0.5) +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Number of Templates per Peak") + 
-#   ylab("Peak Count") + 
-#   xlab("Number of Templates")
-
-filter_RPM <- ggplot(big_table, aes(x=RPM_log, group=classification, color=classification, fill=classification)) +
-  geom_histogram() +
+filter_templates <- ggplot(big_table, aes(x=classification, y=number_templates, color=classification, fill=classification)) +
+  geom_violin() +
+  geom_jitter(height=0, width=0.1) + 
   scale_fill_nejm() +
   scale_color_nejm() +
-  facet_wrap(~classification, scales="free") +
+#  geom_vline(xintercept = 3, color = "red", linetype = "dashed", size = 1) +
+#  annotate("text", x = 70, y = .5*nrow(big_table), label = "Threshold \n 3", color = "red", angle = 0, vjust = -0.5) +
+#  facet_wrap(~classification) +
+  ggtitle("Distribution of Number of Templates per Peak") + 
+  ylab("Peak Count") + 
+  xlab("Number of Templates")
+
+filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, color=classification, fill=classification)) +
+  geom_violin() +
+  geom_jitter(height=0, width=0.1) + 
+  scale_fill_nejm() +
+  scale_color_nejm() +
+#  facet_wrap(~classification, scales="free") +
   ggtitle("Distribution of RPM") + 
   ylab("Peak Count") + 
   xlab("ln(RPM)")
@@ -360,11 +362,10 @@ filter_RPM <- ggplot(big_table, aes(x=RPM_log, group=classification, color=class
 #   xlab("Filter") +
 #   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
 
-# all_plots <- c(filter_chrm, filter_PTA_artifact, filter_templates, filter_RPM, filter_gmotif, filter_template_ratio, filter_chimera, filter_misalignment, filter_polyA_spanning, filter_satellite, filter_segdup)
 pdf(plots_path)
 # filter_chrm
 # filter_PTA_artifact
-# filter_templates
+filter_templates
 filter_RPM
 # filter_gmotif
 # filter_template_ratio
@@ -387,5 +388,5 @@ if (truth_set != "-NA-") {
   peak_table <- big_table[, bed_cols]
 }
 
-write.table(peak_table, classified_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
-write.table(big_table[, lapply(big_table, class) != "list"], big_table_filter_annotation_file, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na = "-NA-")
+write.table(peak_table, classified_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na="-NA-")
+write.table(big_table[, lapply(big_table, class) != "list"], big_table_filter_annotation_file, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na="-NA-")
