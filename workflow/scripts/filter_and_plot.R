@@ -38,10 +38,10 @@ big_table$gmotif_percent <- big_table$gmotif / big_table$reads
 big_table <- merge(big_table, big_table[, c("RPM","peak")], by.x="nearest_peak", by.y="peak", suffixes = c("","_nearest"), all.x=TRUE)
 big_table$nearest_RPM_ratio <- big_table$RPM / big_table$RPM_nearest
 big_table$nearest_RPM_ratio[is.na(big_table$nearest_RPM_ratio)] <- 1
-big_table$number_templates <- unlist(lapply(strsplit(big_table$usp, ";"), `[[`,1))
-big_table$number_templates <- as.numeric(big_table$number_templates)
+big_table$number_templates <- as.numeric(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 1)))
+big_table$templates_per_million <- (big_table$number_templates / big_table$bamreads) * 1000000
 big_table$template_ratio <- NA
-big_table$template_ratio[big_table$number_templates > 1] <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates >1], ";"), `[[`, 2)), ","), `[[`, 2)) / as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates >1] , ";"), `[[`, 2)), ","), `[[`, 1))
+big_table$template_ratio[big_table$number_templates > 1] <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates > 1], ";"), `[[`, 2)), ","), `[[`, 2)) / as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates > 1] , ";"), `[[`, 2)), ","), `[[`, 1))
 # big_table$most_duplicates <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 2)), ","), `[[`, 1)) 
 # big_table$breadth_ratio <- as.numeric(big_table$reads) / as.numeric(big_table$number_templates)
 # big_table$breadth <- as.numeric(big_table$end) - as.numeric(big_table$start)
@@ -173,7 +173,7 @@ if (library == "bulk") {
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
   big_table$classification[big_table$classification == "SOM_clonal" & big_table$RPM >= 100] <- "UNK" # multiple templates and RPM >= 100
 } else if (library == "single") {
-  big_table$classification[big_table$classification == "Candidate"] <- "UNK" # need multiple tissues to distinguish
+  big_table$classification[big_table$classification == "Candidate"] <- "UNK" # need multiple cells to distinguish
 } else if (library == "micro") { # TODO: Examine criteria
   big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
@@ -185,7 +185,7 @@ if (error_prone != "-NA-") {
   big_bed <- big_table[, c("chrm","start","end","peak","RPM","strand")]
   error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm","start","end"), col_types="cii")
     
-  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wo=TRUE)[, "V4"] # TODO: debug
+  error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wo=TRUE)[, "V4"]
 
   # big_table$error-prone <- FALSE
   # big_table$error-prone[big_table$peak %in% error_peak_list] <- TRUE
@@ -239,25 +239,25 @@ cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), fi
 #   ylab("Peak Count") + 
 #   xlab("Peak RPM / Largest Nearby Peak RPM")
 
-filter_templates <- ggplot(big_table, aes(x=classification, y=number_templates, color=classification, fill=classification)) +
+filter_templates <- ggplot(big_table, aes(x=classification, y=templates_per_million, fill=classification, color=classification)) +
   geom_violin() +
-  geom_jitter(height=0, width=0.1) + 
+  geom_jitter(height=0, width=0.2) + 
   scale_fill_nejm() +
   scale_color_nejm() +
 #  geom_vline(xintercept = 3, color = "red", linetype = "dashed", size = 1) +
 #  annotate("text", x = 70, y = .5*nrow(big_table), label = "Threshold \n 3", color = "red", angle = 0, vjust = -0.5) +
 #  facet_wrap(~classification) +
-  ggtitle("Distribution of Number of Templates per Peak") + 
+  ggtitle("Distribution of Templates per Million per Peak") + 
   ylab("Peak Count") + 
   xlab("Number of Templates")
 
-filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, color=classification, fill=classification)) +
+filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, fill=classification, color=classification)) +
   geom_violin() +
-  geom_jitter(height=0, width=0.1) + 
+  geom_jitter(height=0, width=0.2) + 
   scale_fill_nejm() +
   scale_color_nejm() +
 #  facet_wrap(~classification, scales="free") +
-  ggtitle("Distribution of RPM") + 
+  ggtitle("Distribution of RPM per Peak") + 
   ylab("Peak Count") + 
   xlab("ln(RPM)")
 
@@ -388,5 +388,7 @@ if (truth_set != "-NA-") {
   peak_table <- big_table[, bed_cols]
 }
 
-write.table(peak_table, classified_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na="-NA-")
+peak_table <- peak_table %>% arrange(chrm, start)
+write.table(peak_table, classified_peaks, sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE, na="-NA-")
+
 write.table(big_table[, lapply(big_table, class) != "list"], big_table_filter_annotation_file, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na="-NA-")

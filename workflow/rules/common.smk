@@ -1,7 +1,3 @@
-import pandas as pd 
-
-# TODO: Increase memory per subsequent attempt for problematic rules
-
 def get_min_mem_mb(wildcards, attempt):
 	mb = 100 + (100 * (attempt - 1))
 	return mb
