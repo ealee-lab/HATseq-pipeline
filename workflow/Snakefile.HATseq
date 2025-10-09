@@ -15,7 +15,7 @@ from snakemake.utils import validate
 include: "rules/common.smk"
 
 # Read config variables as constants
-SAMPLES = pd.read_csv(config["metadata"], sep="\t", dtype=str).set_index("sample_name", drop=False)
+# SAMPLES = pd.read_csv(config["metadata"], sep="\t", dtype=str).set_index("sample_name", drop=False)
 TE_NAME = config["te_name"]
 REF_GENOME = config["bwa_ref_genome"]
 REFERENCE_DIR = config["reference_dir"]
@@ -23,12 +23,19 @@ LIBRARY = config["library"]
 SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
 
+# Read metadata
+samples = pd.read_csv(config["metadata"], sep="\t", dtype=str)
+
 # Validate configuration
 config_schema = os.path.join(os.path.dirname(workflow.basedir), "config", "schemas", "config.schema.yml")
 sample_schema = os.path.join(os.path.dirname(workflow.basedir), "config", "schemas", "samples.schema.yml")
 
 validate(config, config_schema)
-validate(SAMPLES, sample_schema)
+validate(samples, sample_schema)
+
+# Format metadata
+set_sample_names(samples)
+samples = samples.set_index("sample_name", drop=False)
 
 # Create reference file constants
 EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
@@ -45,7 +52,7 @@ HGSVC3 = REFERENCE_DIR + "/HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed"
 HGSVC3_MELT_LRA = REFERENCE_DIR + "/HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed"
 ONT1019 = REFERENCE_DIR + "/1019_ONT/1019_ONT_Schloissnig2025.bed"
 
-localrules: HATseq # do not submit target rule as separate job
+localrules: HATseq
 
 rule HATseq:
 	input:
@@ -61,15 +68,17 @@ rule HATseq:
 		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_big_table.tsv",
 		"{sample}/{sample}_classified_peaks.bed",
-		"{sample}/{sample}_custom_transduction.fasta",
-		"{sample}/{sample}_transduction_plots.pdf",
+		#"{sample}/{sample}_custom_transduction.fasta",
+		#"{sample}/{sample}_transduction_plots.pdf",
+		"all_{donor}_candidate_peaks.bed"
 		],
-		sample=SAMPLES.index) 
+		sample=samples.index,
+		donor=samples["donor"].unique()) 
 
 rule qc: 
 	input:
-		raw_fastq1 = lambda wildcards: SAMPLES.loc[wildcards.sample]["raw_fastq1"],
-		raw_fastq2 = lambda wildcards: SAMPLES.loc[wildcards.sample]["raw_fastq2"]
+		raw_fastq1 = lambda wildcards: samples.loc[wildcards.sample]["raw_fastq1"],
+		raw_fastq2 = lambda wildcards: samples.loc[wildcards.sample]["raw_fastq2"]
 	output:
 		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz",
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
@@ -121,7 +130,7 @@ rule preprocessing:
 		min_len_informative = 70,
 		min_ovlp = 20,
 		max_err = 0.05,
-		adapter_L1HS = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC",
+		adapter_L1HS = lambda wildcards: samples.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC",
 		adapter_primer = "^TTAGTGGGTGCAGCGCACCA",
 		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC",
 		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
@@ -286,7 +295,7 @@ rule Ntag:
 	benchmark:
 		"benchmarks/Ntag/{sample}.tsv"
 	params:
-		adapter = lambda wildcards: SAMPLES.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
+		adapter = lambda wildcards: samples.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
 	threads: 1
 	resources:
 		runtime = get_Ntag_runtime,
@@ -827,8 +836,8 @@ rule filter_and_classify:
 	benchmark:
 		"benchmarks/filter_and_classify/{sample}.tsv"
 	params: 
-		error_prone = lambda wildcards: SAMPLES.loc[wildcards.sample]["error_prone"], # optional 
-		truth_set = lambda wildcards: SAMPLES.loc[wildcards.sample]["truth_set"], # optional 
+		error_prone = lambda wildcards: samples.loc[wildcards.sample]["error_prone"], # optional 
+		truth_set = lambda wildcards: samples.loc[wildcards.sample]["truth_set"], # optional 
 		hg38 = HG38, # optional 
 		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
 	conda:
@@ -1010,8 +1019,35 @@ rule call_transductions:
 	resources:
 		runtime = get_min_runtime, 
 		mem_mb = get_call_transductions_mem_mb,
+	group: "transduction"
 	shell:
 		"Rscript {workflow.basedir}/scripts/transduction_calling.R "
 			"{input.transduction_big_table} {output.transduction_plots} "
 			"{output.filtered_transduction} {input.transduction_bed} {input.classified_peaks} \n"
-	
+
+rule multi_tissue_classification:
+	input:
+		sample_peaks = lambda wildcards: expand("{name}/{name}_classified_peaks.bed", 
+												  name=get_donor_samples(wildcards, samples))
+	output:
+		donor_peaks = "all_{donor}_candidate_peaks.bed",
+		multi_peaks = "{donor}_multi_peaks.bed"
+	benchmark:
+		"benchmarks/multi_tissue_classification/{donor}.tsv"
+	params:
+		num_tissues = lambda wildcards, input: len(input.sample_peaks)
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_filter_and_classify_mem_mb,
+	group: "classify"
+	shell:
+		"if [[ {params.num_tissues} -ge 3 ]]; then "
+			"python {workflow.basedir}/scripts/multi_classify.py "
+				"-f {input.sample_peaks} "
+				"-n {params.num_tissues} "
+				"-d {wildcards.donor} "
+				"-p {output.donor_peaks} "
+				"-m {output.multi_peaks}; "
+		"else "
+			"touch {output.donor_peaks} && touch {output.multi_peaks}; "
+		"fi"	

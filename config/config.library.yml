@@ -1,4 +1,4 @@
-samples: "path/to/sample/sheet"
+metadata: "path/to/sample/sheet"
 te_name: "TE_name"
 bwa_ref_genome: "/path/to/reference/genome"
 reference_dir: "/path/to/annotations"

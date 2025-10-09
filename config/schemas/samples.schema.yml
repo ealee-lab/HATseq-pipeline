@@ -1,9 +1,13 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 description: entries for the sample sheet
 properties:
-  sample_name:
+  donor:
     type: string
-    description: sample name/identifier
+    description: donor name/identifier
+  tissue:
+    type: string
+    default: "-NA-"
+    description: tissue name
   raw_fastq1:
     type: string
     description: path to read 1
@@ -23,7 +27,7 @@ properties:
     description: path to .bed file of true insertions
 
 required:
-  - sample_name
+  - donor
   - raw_fastq1
   - raw_fastq2
   - index_seq
