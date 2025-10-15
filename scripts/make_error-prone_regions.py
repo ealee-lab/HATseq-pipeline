@@ -14,7 +14,8 @@ def concat_bed_by_donor(donor_tables: dict):
         beds = []
         for table in donor_tables[donor]:
             bed = pd.read_csv(table, sep="\t", 
-                              usecols = ["chrm","start","end","peak","RPM","strand"])
+                              usecols = ["chrm","start","end","peak","RPM","strand","classification"])
+            bed = bed[bed["classification"].isin(["FP","UNK","SOM_clonal","SOM_private"])]
             bed = bed[["chrm","start","end","peak","RPM","strand"]]
             beds.append(bed)
         donor_bed = pd.concat(beds)
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     donor_tables = {}
     for donor in donors:
         tables = glob.glob(
-            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*candidate_peaks.tsv")
+            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*classified_peaks.bed")
         
         if tables != []: # if files exist for donor
             donor_tables[donor] = tables

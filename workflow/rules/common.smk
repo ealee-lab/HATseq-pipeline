@@ -1,7 +1,3 @@
-import pandas as pd 
-
-# TODO: Increase memory per subsequent attempt for problematic rules
-
 def get_min_mem_mb(wildcards, attempt):
 	mb = 100 + (100 * (attempt - 1))
 	return mb
@@ -52,11 +48,11 @@ def get_filter_and_classify_mem_mb(wildcards, attempt):
 	return mb
 
 def get_map_transduction_fasta_mem_mb(wildcards, attempt):
-	mb = 12000 + (2000 * (attempt - 1))
+	mb = 2000 + (2000 * (attempt - 1))
 	return mb
 
 def get_transduction_big_table_mem_mb(wildcards, input, attempt):
-	mb = max((2.75 * input.size_mb - 600) + (1000 * (attempt - 1)), 2000)
+	mb = 8000 + (1000 * (attempt - 1))
 	return mb
 
 def get_call_transductions_mem_mb(wildcards, attempt):
@@ -135,15 +131,9 @@ def get_create_big_table_runtime(wildcards, input, attempt):
 	return minutes
 
 def get_map_transduction_fasta_runtime(wildcards, input, attempt):
-	try:
-		minutes = min(int(input.size_mb / 30) - 90 + (5 * (attempt - 1)), 90)
-	except FileNotFoundError:
-		minutes = 90
+	minutes = 2 + (1 * (attempt - 1))
 	return minutes
 
 def get_transduction_big_table_runtime(wildcards, input, attempt):
-	try:
-		minutes = min(int(input.size_mb / 700) + 1 + (3 * (attempt - 1)), 15)
-	except FileNotFoundError:
-		minutes = 15
+	minutes = 4 + (1 * (attempt - 1))
 	return minutes
