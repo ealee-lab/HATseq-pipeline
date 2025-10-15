@@ -78,7 +78,7 @@ big_table$FP <- FALSE
 cat("\nKR/KNR FILTERS", file=summary_file, sep="\n")
 big_table$classification[(grepl("L1HS", big_table$repeatmasker) | grepl("L1Hs", big_table$evrony))] <- "KR"
 big_table$filter_reason[big_table$classification == "KR" & big_table$RPM < 50] <- "KR_low_RPM" 
-big_table$FP[big_table$filter_reason == "KR_low_RPM"] <- TRUE
+# big_table$FP[big_table$filter_reason == "KR_low_RPM"] <- TRUE
 cat(paste0("KR RPM less than 50: ", nrow(big_table[big_table$filter_reason == "KR_low_RPM",])), file=summary_file, sep="\n")
 
 # Intersect peaks with truth set if benchmarking
@@ -90,6 +90,7 @@ if (truth_set != "-NA-") {
   true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
   true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4","V10")]
   colnames(true_peak_list) <- c("peak","true_insertion_ID")
+  # true_peak_list <- true_peak_list["somatic" %in% true_peak_list$true_insertion_ID,]
   true_peak_IDs = true_peak_list$peak
 
   big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE) # adds true_peak_ID column
@@ -108,7 +109,7 @@ big_table$classification[(grepl("INS:ME:LINE1", big_table$i1kgp) |
                         !(big_table$peak %in% true_peak_IDs) &
                         !(big_table$classification == "KR")] <- "KNR"
 big_table$filter_reason[big_table$classification == "KNR" & big_table$RPM < 50] <- "KNR_low_RPM"
-big_table$FP[big_table$filter_reason == "KNR_low_RPM"] <- TRUE
+# big_table$FP[big_table$filter_reason == "KNR_low_RPM"] <- TRUE
 cat(paste0("KNR RPM less than 50: ", nrow(big_table[big_table$filter_reason == "KNR_low_RPM",])), file=summary_file, sep="\n")
 
 # Label Off-target peaks
@@ -169,11 +170,13 @@ big_table$classification[big_table$FP] <- "FP"
 
 # Label candidate peaks as UNK/SOM
 if (library == "bulk") {
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
+  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$templates_per_million >= 4] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
-  big_table$classification[big_table$classification == "SOM_clonal" & big_table$RPM >= 100] <- "UNK" # multiple templates and RPM >= 100
+  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
 } else if (library == "single") {
   big_table$classification[big_table$classification == "Candidate"] <- "UNK" # need multiple cells to distinguish
+  big_table$classification[big_table$filter_reason == "KR_low_RPM"] <- "FP"
+  big_table$classification[big_table$filter_reason == "KNR_low_RPM"] <- "FP"
 } else if (library == "micro") { # TODO: Examine criteria
   big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
@@ -216,7 +219,7 @@ if (library == "bulk") {
 }
 cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), file=summary_file, sep="\n")
 
-
+print(head(big_table))
 # TODO: Update plotting to work with new classification order
 #### Plotting (pre-filter) ####
 # filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs), group=classification, color=classification, fill=classification)) +

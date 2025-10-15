@@ -1,3 +1,17 @@
+import pandas as pd
+
+#### Manipulate metadata ####
+def set_sample_names(samples):
+	samples.insert(2, "sample_name", None) 
+	samples.loc[samples["tissue"] == "-NA-", "sample_name"] = samples["donor"]
+	samples.loc[samples["tissue"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["tissue"]
+	return
+
+def get_donor_samples(wildcards, samples):
+	names = samples[samples["donor"] == wildcards.donor]["sample_name"]
+	return names
+
+#### Define memory limits for each rule ####
 def get_min_mem_mb(wildcards, attempt):
 	mb = 100 + (100 * (attempt - 1))
 	return mb
@@ -59,6 +73,7 @@ def get_call_transductions_mem_mb(wildcards, attempt):
 	mb = 600 + (150 * (attempt - 1))
 	return mb
 
+#### Define runtime limits for each rule ####
 def get_min_runtime(wildcards, attempt):
 	minutes = 1 + (1 * (attempt - 1))
 	return minutes
