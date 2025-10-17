@@ -16,9 +16,10 @@ transduction_peaks <- args[3]
 transduction_bed_file <- args[4]
 classified_peaks <- args[5]
 
-canonical_chrs <- c("chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9",
-                    "chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19",
-                    "chr20","chr21","chr22","chrX","chrY")
+canonical_chrs <- c("chr1","chr2","chr3","chr4","chr5","chr6",
+                    "chr7","chr8","chr9","chr10","chr11","chr12",
+                    "chr13","chr14","chr15","chr16","chr17","chr18",
+                    "chr19","chr20","chr21","chr22","chrX","chrY")
 
 big_table <- read.table(big_file, sep="\t", skip=1, header=FALSE)
 colnames(big_table) <- c("peak","read","s3p","s5p","h5p","h3p","custompeakname")
@@ -50,24 +51,42 @@ transduction_bed <- read.table(transduction_bed_file, sep="\t", header=FALSE, co
 transduction_table <- merge(transduction_table, transduction_bed, by.x="transduction_support", by.y="custompeakname")
 colnames(transduction_table) <- c("transduction_support","peak","source_chr","source_start","source_end","source_elements")
 
-filtered_table <- read.table(classified_peaks, sep="\t", header=TRUE)
-filtered_table <- filtered_table[,1:7]
-colnames(filtered_table) <- c("chrm","start","end","peak","RPM","strand","classification")
-filtered_table <- filtered_table[filtered_table$classification != "FP",]
-filtered_table <- merge(filtered_table, transduction_table, by="peak", all.x=TRUE)
+filtered_peaks <- read.table(classified_peaks, sep="\t", header=TRUE)
+filtered_peaks <- filtered_peaks[,1:7]
+colnames(filtered_peaks) <- c("chr","start","end","peak","RPM","strand","classification")
+filtered_peaks <- filtered_peaks[filtered_peaks$classification != "FP",]
+
+transduction_table$source_classification <- NA
+for (row in (1:nrow(transduction_table))) {
+  element_classes <- c()
+
+  for (element in unlist(strsplit(transduction_table$source_elements[row], ","))) {
+    element_class <- filtered_peaks$classification[filtered_peaks$peak == element]
+    element_classes <- c(element_classes, element_class)
+  
+  transduction_table$source_classification[row] <- paste(element_classes, collapse=",")
+  }
+}
+
+filtered_table <- merge(filtered_peaks, transduction_table, by="peak", all.x=TRUE)
 
 filtered_table$transduction_support[grepl("KR",filtered_table$classification)] <- NA
 filtered_table$source_chr[grepl("KR",filtered_table$classification)] <- NA
 filtered_table$source_start[grepl("KR",filtered_table$classification)] <- NA
 filtered_table$source_end[grepl("KR",filtered_table$classification)] <- NA
 filtered_table$source_elements[grepl("KR",filtered_table$classification)] <- NA
-circos_table <- filtered_table[!is.na(filtered_table$source_chr), c("chrm","start","end","source_chr","source_start","source_end","classification")]
+
+circos_table <- filtered_table[!is.na(filtered_table$source_chr), 
+                               c("chr","start","end","classification",
+                                 "source_chr","source_start","source_end","source_classification")]
+circos_table <- circos_table[(circos_table$chr %in% canonical_chrs) & (circos_table$source_chr %in% canonical_chrs),]
+circos_table <- circos_table %>% arrange(source_chr,source_start) 
 write.table(circos_table, transduction_peaks, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE, na="-NA-")
 
-colnames(circos_table) <- c("chrom1","start1","end1","chrom2","start2","end2","classification")
-circos_table <- circos_table[(circos_table$chrom1 %in% canonical_chrs) & (circos_table$chrom2 %in% canonical_chrs),]
-circos_table_polymorphic <- circos_table[grepl("KR|KNR",circos_table$classification),]
-circos_table_novel <- circos_table[circos_table$classification %in% c("UNK","SOM","SOM_clonal","SOM_private"),]
+colnames(circos_table) <- c("chrom1","start1","end1","classification1","chrom2","start2","end2","classification2")
+circos_cols <- c("chrom1","start1","end1","chrom2","start2","end2")
+circos_table_polymorphic <- circos_table[circos_table$classification1 %in% c("KR","KNR","Off-target"), circos_cols]
+circos_table_novel <- circos_table[circos_table$classification1 %in% c("UNK","SOM","SOM_clonal","SOM_private"), circos_cols]
 
 pdf(plots_path)
 

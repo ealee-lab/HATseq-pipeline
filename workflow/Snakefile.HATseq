@@ -68,8 +68,8 @@ rule HATseq:
 		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_big_table.tsv",
 		"{sample}/{sample}_classified_peaks.bed",
-		#"{sample}/{sample}_custom_transduction.fasta",
-		#"{sample}/{sample}_transduction_plots.pdf",
+		"{sample}/{sample}_custom_transduction.fasta",
+		"{sample}/{sample}_transduction_plots.pdf",
 		"all_{donor}_candidate_peaks.bed"
 		],
 		sample=samples.index,
@@ -891,7 +891,7 @@ rule map_transduction_fasta:
 	shell:
 		"set -x \n"
 
-		"awk -v OFS='\t' 'NR > 1 {{if ($7 != 'FP') print $1,$2,$3,$4}}' {input.classified_peaks} | "
+		"awk -v OFS='\t' '{{if ($7 != \"FP\") print $1,$2,$3,$4}}' {input.classified_peaks} | "
 			"sort -k1,1 -k2,2n | "
 			"bedtools merge -i stdin -c 4 -o collapse | "
 			"awk -v OFS='\t' '{{print $1,$2,$3,\"{wildcards.sample}_custom_reference_\"NR,$4}}' "
