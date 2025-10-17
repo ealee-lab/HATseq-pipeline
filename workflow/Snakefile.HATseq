@@ -838,7 +838,7 @@ rule filter_and_classify:
 	params: 
 		error_prone = lambda wildcards: samples.loc[wildcards.sample]["error_prone"], # optional 
 		truth_set = lambda wildcards: samples.loc[wildcards.sample]["truth_set"], # optional 
-		hg38 = HG38, # optional 
+		#hg38 = HG38, # optional 
 		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
 	conda:
 		"envs/plotR.yml"
@@ -849,7 +849,7 @@ rule filter_and_classify:
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
 			"{input.big_table} {LIBRARY} {output.plots} {output.classified_peaks} {output.summary_file} "
-			"{params.error_prone} {params.truth_set} {params.hg38} \n"
+			"{params.error_prone} {params.truth_set} \n"
 		"grep -E 'UNK|SOM' {output.classified_peaks} | "
 			"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "

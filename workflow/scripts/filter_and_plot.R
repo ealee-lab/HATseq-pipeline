@@ -17,44 +17,34 @@ classified_peaks <- args[4]
 summary <- args[5]
 error_prone <- args[6]
 truth_set <- args[7]
-genome <- args[8]
+# genome <- args[8]
 big_table_filter_annotation_file <- paste0(sub("_classified_peaks.bed$", "", classified_peaks),
                                                "_big_table_filter_reasons.tsv")
 
 # Read input and define columns
-canonical_chrs <- c("chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9",
-                    "chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19",
-                    "chr20","chr21","chr22","chrX","chrY")
+canonical_chrs <- c("chr1","chr2","chr3","chr4","chr5","chr6",
+                    "chr7","chr8","chr9","chr10","chr11","chr12",
+                    "chr13","chr14","chr15","chr16","chr17","chr18",
+                    "chr19","chr20","chr21","chr22","chrX","chrY")
 
 big_table <- read.table(big_table_file, sep="\t")
 colnames(big_table) <- c("chrm","start","end","peak","shape","strand",
                          "reads","Ntag","polyA","gmotif","chimera","misaligned",
-                         "repeatmasker","evrony","homopolymers",
-                         "i1kgp","gnomad","nyuwa","xtea","hgsvc3","melt_lra","ont",
-                         "bamreads","peakreads","usp","max_usp_diff","median_usp_diff","mean_usp_diff",
-                         "RPM","nearest_peak","SegDups","max_distance")
+                         "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
+                         "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads",
+                         "usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak",
+                         "SegDups","max_distance")
 
 big_table$gmotif_percent <- big_table$gmotif / big_table$reads
 big_table <- merge(big_table, big_table[, c("RPM","peak")], by.x="nearest_peak", by.y="peak", suffixes = c("","_nearest"), all.x=TRUE)
 big_table$nearest_RPM_ratio <- big_table$RPM / big_table$RPM_nearest
 big_table$nearest_RPM_ratio[is.na(big_table$nearest_RPM_ratio)] <- 1
+# big_table$RPM_log <- log(big_table$RPM)
 big_table$number_templates <- as.numeric(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 1)))
 big_table$templates_per_million <- (big_table$number_templates / big_table$bamreads) * 1000000
 big_table$template_ratio <- NA
 big_table$template_ratio[big_table$number_templates > 1] <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates > 1], ";"), `[[`, 2)), ","), `[[`, 2)) / as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp[big_table$number_templates > 1] , ";"), `[[`, 2)), ","), `[[`, 1))
-# big_table$most_duplicates <- as.numeric(lapply(strsplit(unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 2)), ","), `[[`, 1)) 
-# big_table$breadth_ratio <- as.numeric(big_table$reads) / as.numeric(big_table$number_templates)
-# big_table$breadth <- as.numeric(big_table$end) - as.numeric(big_table$start)
-# big_table$peak_shape <- strsplit(unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 4)), ",")
-# big_table$max_depth <- unlist(lapply(strsplit(big_table$shape, ";"), `[[`, 2))
 big_table$polyA_percent <- big_table$polyA / big_table$reads
-# big_table$segdups_annotation <- FALSE
-# big_table$segdups_annotation[big_table$SegDups != '.'] <- TRUE
-# big_table$chimera[big_table$chimera == ""] <- "chimera"
-# big_table$misalignment[big_table$misaligned == ""] <- "misalignment"
-# big_table$polymer_annotation <- FALSE
-# big_table$polymer_annotation[big_table$homopolymers != '.'] <- TRUE
-big_table$RPM_log <- log(big_table$RPM)
 
 
 #### Classification and Filtering ####
@@ -81,13 +71,13 @@ big_table$filter_reason[big_table$classification == "KR" & big_table$RPM < 50] <
 # big_table$FP[big_table$filter_reason == "KR_low_RPM"] <- TRUE
 cat(paste0("KR RPM less than 50: ", nrow(big_table[big_table$filter_reason == "KR_low_RPM",])), file=summary_file, sep="\n")
 
-# Intersect peaks with truth set if benchmarking
+# Intersect peaks with truth set for benchmarking
 true_peak_IDs = list()
 if (truth_set != "-NA-") {
   big_bed <- big_table[, c("chrm","start","end","peak","RPM","strand")]
   true_bed <- read_tsv(truth_set, col_names=c("chrm","start","end","name","score","strand"), col_types="ciicdc")
 
-  true_bed_slop <- bt.slop(i=true_bed, g=genome, b=50)
+  true_bed_slop <- bt.slop(i=true_bed, g="hg38", b=50)
   true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4","V10")]
   colnames(true_peak_list) <- c("peak","true_insertion_ID")
   # true_peak_list <- true_peak_list["somatic" %in% true_peak_list$true_insertion_ID,]
@@ -98,7 +88,7 @@ if (truth_set != "-NA-") {
 }
 
 # Label KNR peaks
-# Also, artifically remove KNR labels from peaks in truth set if benchmarking
+# Also, artifically remove KNR labels from peaks in truth set for benchmarking
 big_table$classification[(grepl("INS:ME:LINE1", big_table$i1kgp) | 
                          grepl("INS:ME:LINE1", big_table$gnomad) | 
                          grepl("INS:ME:LINE1", big_table$nyuwa) | 
@@ -117,7 +107,6 @@ big_table$classification[grepl("L1PA2|L1PA3|L1PA4|L1PA5|L1PA6|L1PA7", big_table$
                         !(big_table$classification == "KR" | big_table$classification == "KNR")] <- "Off-target"
 big_table$filter_reason[big_table$classification == "Off-target"] <- "Off-target"
 
-
 # Filter candidate peaks for FPs
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 
@@ -135,7 +124,7 @@ if (library != "bulk") {
   cat(paste0("Nearby larger peak (less than 20% ratio): ", nrow(big_table[big_table$filter_reason == "nearby_peak",])), file=summary_file, sep="\n")
 
   # In single-cell libraries, remove peaks with too few original fragments
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates <= 2)] <- "num_templates"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 3)] <- "num_templates"
   big_table$FP[big_table$filter_reason == "num_templates"] <- TRUE
   cat(paste0("Number of templates less than 3: ", nrow(big_table[big_table$filter_reason == "num_templates",])), file=summary_file, sep="\n")
 
@@ -157,13 +146,13 @@ big_table$FP[big_table$filter_reason == "polyApercent"] <- TRUE
 cat(paste0("No polyA containing reads (junction spanning): ", nrow(big_table[big_table$filter_reason == "polyApercent",])), file=summary_file, sep="\n")
 
 if (library == "bulk") {
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM <= 1)] <- "RPM"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <- "RPM"
   big_table$FP[big_table$filter_reason == "RPM"] <- TRUE
-  cat(paste0("RPM less than or equal 1: ", nrow(big_table[(big_table$filter_reason == "RPM"),])), file=summary_file, sep="\n")
+  cat(paste0("RPM less than 1: ", nrow(big_table[(big_table$filter_reason == "RPM"),])), file=summary_file, sep="\n")
 } else {
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM <= 5)] <-"RPM"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"
   big_table$FP[big_table$filter_reason == "RPM"] <- TRUE
-  cat(paste0("RPM less than or equal 5: ", nrow(big_table[big_table$filter_reason == "RPM",])), file=summary_file, sep="\n")
+  cat(paste0("RPM less than 5: ", nrow(big_table[big_table$filter_reason == "RPM",])), file=summary_file, sep="\n")
 }
 
 big_table$classification[big_table$FP] <- "FP"
@@ -174,9 +163,9 @@ if (library == "bulk") {
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
 } else if (library == "single") {
-  big_table$classification[big_table$classification == "Candidate"] <- "UNK" # need multiple cells to distinguish
-  big_table$classification[big_table$filter_reason == "KR_low_RPM"] <- "FP"
-  big_table$classification[big_table$filter_reason == "KNR_low_RPM"] <- "FP"
+  big_table$classification[big_table$classification == "Candidate"] <- "SOM" # need multiple cells to distinguish
+  # big_table$classification[big_table$filter_reason == "KR_low_RPM"] <- "FP"
+  # big_table$classification[big_table$filter_reason == "KNR_low_RPM"] <- "FP"
 } else if (library == "micro") { # TODO: Examine criteria
   big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
@@ -189,12 +178,9 @@ if (error_prone != "-NA-") {
   error_bed <- read_tsv(error_prone, col_select=c(1,2,3), col_names=c("chrm","start","end"), col_types="cii")
     
   error_peak_list <- bt.intersect(a=big_bed, b=error_bed, wo=TRUE)[, "V4"]
-
-  # big_table$error-prone <- FALSE
-  # big_table$error-prone[big_table$peak %in% error_peak_list] <- TRUE
   
   big_table$filter_reason[(big_table$peak %in% error_peak_list) & 
-                          (big_table$classification == "SOM_private" | big_table$classification == "SOM_clonal") & 
+                          (grepl("SOM", big_table$classification)) & 
                           !(big_table$FP)] <- "error-prone"
   big_table$FP[big_table$filter_reason == "error-prone"] <- TRUE
   big_table$classification[big_table$FP] <- "FP"
@@ -219,7 +205,6 @@ if (library == "bulk") {
 }
 cat(paste0("Total FP: ", nrow(big_table[big_table$classification == "FP",])), file=summary_file, sep="\n")
 
-print(head(big_table))
 # TODO: Update plotting to work with new classification order
 #### Plotting (pre-filter) ####
 # filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs), group=classification, color=classification, fill=classification)) +
@@ -242,6 +227,28 @@ print(head(big_table))
 #   ylab("Peak Count") + 
 #   xlab("Peak RPM / Largest Nearby Peak RPM")
 
+ filter_polyA_spanning <-ggplot(big_table, aes(x = classification, y=polyA_percent, fill=classification, color=classification)) +
+   geom_violin() +
+   geom_jitter(height=0, width=0.2) +
+   scale_fill_nejm() +
+   scale_color_nejm() +
+  #  geom_hline(yintercept = 0, color = "red", linetype = "dashed", size = 1) +
+  #  annotate("text", x=2.5,  y = 0.1, label = "Threshold \n 0%", color = "red", angle = 0, vjust = -0.5) +
+   #facet_wrap(~classification) +
+   ggtitle("Distribution of % of Reads Spanning the Insertion Junction per Peak") + 
+   ylab("% of Reads Spanning Insertion Junction") + 
+   xlab("Classification")
+
+filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM, fill=classification, color=classification)) +
+  geom_violin() +
+  geom_jitter(height=0, width=0.2) + 
+  scale_fill_nejm() +
+  scale_color_nejm() +
+#  facet_wrap(~classification, scales="free") +
+  ggtitle("Distribution of RPM per Peak") + 
+  ylab("RPM") + 
+  xlab("Classification")
+
 filter_templates <- ggplot(big_table, aes(x=classification, y=templates_per_million, fill=classification, color=classification)) +
   geom_violin() +
   geom_jitter(height=0, width=0.2) + 
@@ -251,18 +258,8 @@ filter_templates <- ggplot(big_table, aes(x=classification, y=templates_per_mill
 #  annotate("text", x = 70, y = .5*nrow(big_table), label = "Threshold \n 3", color = "red", angle = 0, vjust = -0.5) +
 #  facet_wrap(~classification) +
   ggtitle("Distribution of Templates per Million per Peak") + 
-  ylab("Peak Count") + 
-  xlab("Number of Templates")
-
-filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, fill=classification, color=classification)) +
-  geom_violin() +
-  geom_jitter(height=0, width=0.2) + 
-  scale_fill_nejm() +
-  scale_color_nejm() +
-#  facet_wrap(~classification, scales="free") +
-  ggtitle("Distribution of RPM per Peak") + 
-  ylab("Peak Count") + 
-  xlab("ln(RPM)")
+  ylab("Templates per Million") + 
+  xlab("Classification")
 
 # filter_gmotif <-ggplot(big_table, aes(x = classification, y=gmotif_percent, group=classification, color=classification, fill=classification)) +
 #   geom_violin() +
@@ -303,17 +300,6 @@ filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, fill=classifica
 #     ggtitle("Distribution of Misaligned reads Peaks") + 
 #     ylab("Peak Count")+
 #     xlab("Misalignment")
-
-#  filter_polyA_spanning <-ggplot(big_table, aes(x = classification, y=polyA_percent, group=classification, color=classification, fill=classification)) +
-#    geom_violin() +
-#    scale_fill_nejm() +
-#    scale_color_nejm() +
-#    geom_hline(yintercept = 0, color = "red", linetype = "dashed", size = 1) +
-#    annotate("text", x=2.5,  y = 0.1, label = "Threshold \n 0%", color = "red", angle = 0, vjust = -0.5) +
-#    #facet_wrap(~classification) +
-#    ggtitle("Distribution of Percent of Reads Spanning the Insertion Junction per Peak") + 
-#    ylab("Percent of Reads Spanning Insertion Junction") + 
-#    xlab("Classification")
 
 # filter_satellite <-ggplot(big_table, aes(x = (grepl("ALR/Alpha", repeatmasker)), group=classification, color=classification, fill=classification)) +
 #   geom_bar() +
@@ -366,15 +352,15 @@ filter_RPM <- ggplot(big_table, aes(x=classification, y=RPM_log, fill=classifica
 #   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
 
 pdf(plots_path)
+filter_polyA_spanning
+filter_RPM
+filter_templates
 # filter_chrm
 # filter_PTA_artifact
-filter_templates
-filter_RPM
 # filter_gmotif
 # filter_template_ratio
 # filter_chimera
 # filter_misalignment
-# filter_polyA_spanning
 # filter_satellite
 # filter_segdup
 # filter_reasons
