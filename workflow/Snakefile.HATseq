@@ -34,8 +34,8 @@ validate(config, config_schema)
 validate(samples, sample_schema)
 
 # Format metadata
-set_sample_names(samples)
-samples = samples.set_index("sample_name", drop=False)
+set_sample_names(samples, LIBRARY)
+samples = samples.set_index("sample_name")
 
 # Create reference file constants
 EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
@@ -1025,7 +1025,7 @@ rule call_transductions:
 			"{input.transduction_big_table} {output.transduction_plots} "
 			"{output.filtered_transduction} {input.transduction_bed} {input.classified_peaks} \n"
 
-rule multi_tissue_classification:
+rule multi_sample_classification:
 	input:
 		sample_peaks = lambda wildcards: expand("{name}/{name}_classified_peaks.bed", 
 												  name=get_donor_samples(wildcards, samples))
@@ -1033,7 +1033,7 @@ rule multi_tissue_classification:
 		donor_peaks = "all_{donor}_candidate_peaks.bed",
 		multi_peaks = "{donor}_multi_peaks.bed"
 	benchmark:
-		"benchmarks/multi_tissue_classification/{donor}.tsv"
+		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
 		num_tissues = lambda wildcards, input: len(input.sample_peaks)
 	resources:

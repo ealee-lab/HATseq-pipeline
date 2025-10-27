@@ -1,10 +1,15 @@
 import pandas as pd
 
 #### Manipulate metadata ####
-def set_sample_names(samples):
-	samples.insert(2, "sample_name", None) 
-	samples.loc[samples["tissue"] == "-NA-", "sample_name"] = samples["donor"]
-	samples.loc[samples["tissue"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["tissue"]
+def set_sample_names(samples, library):
+	samples.insert(0, "sample_name", None) 
+
+	if library == "bulk":
+		samples.loc[samples["tissue"] == "-NA-", "sample_name"] = samples["donor"]
+		samples.loc[samples["tissue"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["tissue"]
+	else:
+		samples.loc[samples["cell"] == "-NA-", "sample_name"] = samples["donor"]
+		samples.loc[samples["cell"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["cell"]
 	return
 
 def get_donor_samples(wildcards, samples):
@@ -21,7 +26,7 @@ def get_qc_mem_mb(wildcards, attempt):
 	return mb
 
 def get_preprocessing_mem_mb(wildcards, input, attempt):
-	mb = max((1.25 * input.size_mb - 5000) + (2000 * (attempt - 1)), 2000)
+	mb = max((1.25 * input.size_mb - 4000) + (4000 * (attempt - 1)), 2000)
 	return mb
 
 def get_alignment_mem_mb(wildcards, attempt):

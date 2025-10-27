@@ -4,6 +4,10 @@ properties:
   donor:
     type: string
     description: donor name/identifier
+  cell:
+    type: string
+    default: "-NA-"
+    description: cell identifier (for single-cell)
   tissue:
     type: string
     default: "-NA-"

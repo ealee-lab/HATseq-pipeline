@@ -17,7 +17,7 @@ classified_peaks <- args[4]
 summary <- args[5]
 error_prone <- args[6]
 truth_set <- args[7]
-# genome <- args[8]
+
 big_table_filter_annotation_file <- paste0(sub("_classified_peaks.bed$", "", classified_peaks),
                                                "_big_table_filter_reasons.tsv")
 
@@ -80,7 +80,7 @@ if (truth_set != "-NA-") {
   true_bed_slop <- bt.slop(i=true_bed, g="hg38", b=50)
   true_peak_list <- bt.intersect(a=big_bed, b=true_bed_slop, wo=TRUE, S=TRUE)[, c("V4","V10")]
   colnames(true_peak_list) <- c("peak","true_insertion_ID")
-  # true_peak_list <- true_peak_list["somatic" %in% true_peak_list$true_insertion_ID,]
+  #true_peak_IDs <- true_peak_list$peak[grepl("somatic", true_peak_list$true_insertion_ID)]
   true_peak_IDs = true_peak_list$peak
 
   big_table <- merge(big_table, true_peak_list, by="peak", all.x=TRUE) # adds true_peak_ID column
