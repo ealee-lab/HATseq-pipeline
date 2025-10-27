@@ -3,23 +3,24 @@ import pandas as pd
 import pybedtools
 from pybedtools import BedTool
 
-def get_multiintvls(names):
+def get_multiintvls(bedtools):
     """Report all intervals along with the number of samples that 
     intersect each interval."""
     x = BedTool()
-    intvls = x.multi_intersect(i=names)
+    fns = [bt.fn for bt in bedtools]
+    intvls = x.multi_intersect(i=fns)
     intvls = intvls.merge(c=4, o='max')
     return intvls
 
 def get_corresponding_sample_peaks(peaks, intvls, donor):
-    """Find the corresponding tissue-specific peak for each interval."""
+    """Find the corresponding sample-specific peak for each interval."""
     dfs = []
 
     for sample in peaks:
         sample_intvls = sample.intersect(intvls, wa=True, wb=True)
         df = sample_intvls.to_dataframe(disable_auto_names=True, header=None)
         df.columns = ["s_chrm","s_start","s_end","peak",
-                      "RPM","strand","classification",
+                      "RPM","strand","classification","filter",
                       "chrm","start","end","num"]
         dfs.append(df)
     peak_df = pd.concat(dfs)
@@ -31,19 +32,27 @@ def get_corresponding_sample_peaks(peaks, intvls, donor):
 
 def get_peaks_for_reclassification(peak_df):
     """Determine which peaks likely represent putative insertions, and thus, 
-    which can be re-classified based on multi-tissue information."""
-    # Only re-classify putative insertions in >= 3 tissues
+    which can be re-classified based on multi-sample information."""
+    
+    # Only re-classify putative insertions in >= 3 samples
     multi_peaks = peak_df[peak_df["num"] >= 3]
+
     put_peaks = multi_peaks[multi_peaks["classification"].isin(["UNK","SOM_clonal","SOM_private"])]["name"].unique()
     known_peaks = multi_peaks[multi_peaks["classification"].isin(["KR","KNR","Off-target"])]["name"].unique()
+    filter_peaks = multi_peaks[~(multi_peaks["filter"].isin(["-NA-","RPM"]))]["name"].unique()
 
-    # Peak must be UNK/SOM in >= 1 tissue and not KR/KNR/Off-target in any tissue
-    reclass_df = multi_peaks[(multi_peaks["name"].isin(put_peaks)) & (~multi_peaks["name"].isin(known_peaks))]
+    # Peak must be UNK/SOM in >= 1 sample... 
+    # AND not KR/KNR/Off-target in any sample...
+    # AND not filtered out in any sample
+    reclass_df = multi_peaks[multi_peaks["name"].isin(put_peaks)]
+    reclass_df = reclass_df[~reclass_df["name"].isin(known_peaks)]
+    reclass_df = reclass_df[~reclass_df["name"].isin(filter_peaks)]
+
     peak_map = dict(zip(reclass_df["peak"], reclass_df["name"]))
 
     group_df = reclass_df.groupby(["chrm","start","end","name","num"])
     group_df = group_df.agg(
-        RPM=pd.NamedAgg("RPM", lambda x: ",".join(str(x))),
+        RPM=pd.NamedAgg("RPM", lambda x: x.mean()),
         CV=pd.NamedAgg("RPM", lambda x: x.std() / x.mean()),
         strand=pd.NamedAgg("strand", lambda x: ",".join(set(x))),
         peaks=pd.NamedAgg("peak", lambda x: ",".join(x)))
@@ -51,7 +60,7 @@ def get_peaks_for_reclassification(peak_df):
     return group_df.reset_index(), peak_map
 
 def reclassify_peaks(reclass_df, num):
-    """Re-classify putative insertions based on information from multiple tissues."""
+    """Re-classify putative insertions based on information from multiple samples."""
     reclass_df["classification"] = "-NA-"
     
     reclass_df.loc[(reclass_df["num"] > 1) & 
@@ -70,7 +79,8 @@ def reclassify_peaks(reclass_df, num):
 def format_and_write_peaks(peaks, reclass_df, peak_map, peakfile, multifile):
     """Concatenate and write all relevant peaks for the given donor."""
     all_df = pd.concat(peaks)
-    put_df = all_df[all_df["classification"].isin(["FP","UNK","SOM_clonal","SOM_private"])]
+    put_df = all_df[(all_df["classification"].isin(["UNK","SOM_clonal","SOM_private"])) |
+                    (all_df["filter"] == "RPM")]
 
     put_df["donor_peak"] = put_df["peak"].map(peak_map)
     put_df.to_csv(peakfile, sep="\t", index=False, header=True)
@@ -82,13 +92,13 @@ def format_and_write_peaks(peaks, reclass_df, peak_map, peakfile, multifile):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="A script to classify peaks occurring in multiple tissues.")
+        description="A script to classify peaks occurring in multiple samples.")
     parser.add_argument("-f", "--filenames", 
                         help="List of file names for all sample peaks for given donor", 
                         nargs="+", 
                         required=True)
     parser.add_argument("-n", "--num", 
-                        help="Number of tissues for given donor", 
+                        help="Number of tissues or cells for given donor", 
                         type=int,
                         required=True)
     parser.add_argument("-d", "--donor", 
@@ -98,21 +108,35 @@ if __name__ == "__main__":
                         help="Path to output file with all putative peaks for donor",
                         required=True)
     parser.add_argument("-m", "--multifile", 
-                        help="Path to output file with multi-tissue peaks for donor",
+                        help="Path to output file with multi-sample peaks for donor",
                         required=True)
     args = parser.parse_args()
 
-    # Read in sample peak files
-    dfs = []
-    for file in args.filenames:
-        df = pd.read_csv(file, sep="\t", 
-                         usecols=[0,1,2,3,4,5,6], 
-                         names=["chrm","start","end","peak","RPM","strand","classification"])
-        dfs.append(df)
-    bedtools = [BedTool.from_dataframe(df) for df in dfs]
+    peaks = []
+    plus_peaks = []
+    minus_peaks = []
 
-    intvls = get_multiintvls(args.filenames)
-    peak_df = get_corresponding_sample_peaks(bedtools, intvls, args.donor)
+    # Read in sample peak files
+    for file in args.filenames:
+        sample = pd.read_csv(file, sep="\t", 
+                             usecols=[0,1,2,3,4,5,6,7], 
+                             names=["chrm","start","end","peak","RPM","strand",
+                                    "classification","filter"])
+        
+        peaks.append(sample)
+        plus_peaks.append(sample[sample["strand"] == "+"])
+        minus_peaks.append(sample[sample["strand"] == "-"])
+
+    peak_bts = [BedTool.from_dataframe(df) for df in peaks]
+    plus_bts = [BedTool.from_dataframe(df) for df in plus_peaks]
+    minus_bts = [BedTool.from_dataframe(df) for df in minus_peaks]
+
+    plus_intvls = get_multiintvls(plus_bts)
+    minus_intvls = get_multiintvls(minus_bts)
+
+    intvls = plus_intvls.cat(minus_intvls, postmerge=False)
+
+    peak_df = get_corresponding_sample_peaks(peak_bts, intvls, args.donor)
     reclass_df, peak_map = get_peaks_for_reclassification(peak_df)
     reclassify_peaks(reclass_df, args.num)
-    format_and_write_peaks(dfs, reclass_df, peak_map, args.peakfile, args.multifile)
+    format_and_write_peaks(peaks, reclass_df, peak_map, args.peakfile, args.multifile)
