@@ -15,10 +15,10 @@ from snakemake.utils import validate
 include: "rules/common.smk"
 
 # Read config variables as constants
-# SAMPLES = pd.read_csv(config["metadata"], sep="\t", dtype=str).set_index("sample_name", drop=False)
 TE_NAME = config["te_name"]
 REF_GENOME = config["bwa_ref_genome"]
 REFERENCE_DIR = config["reference_dir"]
+ERROR_PRONE = config.get("error_prone", "-NA-") # optional
 LIBRARY = config["library"]
 SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
@@ -35,7 +35,7 @@ validate(samples, sample_schema)
 
 # Format metadata
 set_sample_names(samples, LIBRARY)
-samples = samples.set_index("sample_name")
+samples = samples.set_index("sample_name", drop=False)
 
 # Create reference file constants
 EVRONY_KR = REFERENCE_DIR + "/RepeatMasker/hg38.Evrony_KR_960.v37.revised.bed" # Lifted over
@@ -237,13 +237,13 @@ rule alignment:
 	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
-		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {params.cores} {params.RG_ID} {REF_GENOME} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.bwa_bam} \n"
 		"samtools sort -o {output.bwa_sorted_bam} {output.bwa_bam} \n"
 		"samtools index {output.bwa_sorted_bam} \n"
 
-		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {params.cores} {params.RG_ID} {REF_GENOME} {input.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.trim_bwa_bam} \n"
 		# Unique read = read with MAPQ >= 20 and edit distance < 4
@@ -477,10 +477,10 @@ rule peak_calling:
 					"{{print $1,$2,$2+1,$4,$5,$6}} "
 				"else "
 					"{{print $1,$3,$3+1,$4,$5,$6}} }}' {output.peaks}) | "
-			"bedtools getfasta -fi {input.ref_genome} -bed stdin -name "
+			"bedtools getfasta -fi {REF_GENOME} -bed stdin -name "
 			"> {output.breakpoint_fa} \n"
 
-		"bedtools getfasta -fi {input.ref_genome} -bed {output.peaks} -name > {output.peak_seq} \n"
+		"bedtools getfasta -fi {REF_GENOME} -bed {output.peaks} -name > {output.peak_seq} \n"
 
 rule count_templates:
 	input:
@@ -836,9 +836,7 @@ rule filter_and_classify:
 	benchmark:
 		"benchmarks/filter_and_classify/{sample}.tsv"
 	params: 
-		error_prone = lambda wildcards: samples.loc[wildcards.sample]["error_prone"], # optional 
 		truth_set = lambda wildcards: samples.loc[wildcards.sample]["truth_set"], # optional 
-		#hg38 = HG38, # optional 
 		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
 	conda:
 		"envs/plotR.yml"
@@ -849,7 +847,7 @@ rule filter_and_classify:
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
 			"{input.big_table} {LIBRARY} {output.plots} {output.classified_peaks} {output.summary_file} "
-			"{params.error_prone} {params.truth_set} \n"
+			"{ERROR_PRONE} {params.truth_set} \n"
 		"grep -E 'UNK|SOM' {output.classified_peaks} | "
 			"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
@@ -898,7 +896,7 @@ rule map_transduction_fasta:
 			"> {output.transduction_bed} \n"
 
 		# Everything is with respect to the reference at this point, fasta of loci and fasta of softclipped reads
-		"bedtools getfasta -fi {input.ref_genome} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" 
+		"bedtools getfasta -fi {REF_GENOME} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" 
 		
 		"cat {input.L1HS_decoy} >> {output.transduction_fasta} \n" 
 		"bwa index {output.transduction_fasta} \n"

@@ -21,10 +21,6 @@ properties:
   index_seq:
     type: string
     description: 4 bp in-line index used during library prep 
-  error_prone:
-    type: string
-    default: "-NA-"
-    description: path to .bed file of error-prone regions
   truth_set:
     type: string
     default: "-NA-"
