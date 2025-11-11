@@ -33,12 +33,12 @@ fi
 export TMPDIR=${tmpdir} # used as tmpdir by snakemake
 
 # Run the pipeline
-snakemake --unlock -s Snakefile.HATseq \
+snakemake --unlock -s Snakefile \
     --configfile ${config} \
     --directory ${outdir} \
     --profile ${profile}
 
-snakemake -s Snakefile.HATseq \
+snakemake -s Snakefile \
     --configfile ${config} \
     --directory ${outdir} \
     --profile ${profile} \

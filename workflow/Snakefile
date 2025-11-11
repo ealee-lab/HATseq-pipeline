@@ -82,27 +82,28 @@ rule qc:
 	output:
 		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz",
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
-		fastp_html_report = "{sample}/{sample}_fastp_html_report.txt",
-		fastqc_report_path = directory("{sample}/{sample}_fastqc_report/")
+		fastp_html_report = "{sample}/reports/{sample}_fastp.html",
+		fastp_json_report = "{sample}/reports/{sample}_fastp.json"
 	benchmark:
 		"benchmarks/qc/{sample}.tsv"
 	params:
 		illumina_adapter = "AGATCGGAAGAGC",
 		length_req = 50,
+		report_path = lambda wildcards: f"{wildcards.sample}/reports"
 	threads: 4
 	resources:
 		runtime = get_qc_runtime,
 		mem_mb = get_qc_mem_mb
-	group: "fastq"
 	shell:
 		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
 			"-i {input.raw_fastq1} -I {input.raw_fastq2} "
 			"-o {output.illumina_adapter_trimmed_fastq1} -O {output.illumina_adapter_trimmed_fastq2} "
-			"-h {output.fastp_html_report} -j /dev/null \n" # Run fastp 
+			"-h {output.fastp_html_report} "
+			"-j {output.fastp_json_report} \n" # Run fastp 
 
-		"mkdir -p {output.fastqc_report_path} && "
+		"mkdir -p {params.report_path} && "
 			"fastqc -t {threads} --noextract --nogroup "
-				"-o {output.fastqc_report_path} "
+				"-o {params.report_path} "
 				"{input.raw_fastq1} {input.raw_fastq2}" # Run fastqc 
 
 rule preprocessing:
@@ -122,7 +123,7 @@ rule preprocessing:
 		mappable_R1_fastq1 = "{sample}/{sample}_mappable_R1_fastq1.gz",
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
-		cutadapt_report = "{sample}/{sample}_cutadapt_report.txt"
+		cutadapt_report = "{sample}/reports/{sample}_cutadapt_report.txt"
 	benchmark:
 		"benchmarks/preprocessing/{sample}.tsv"
 	params:
@@ -142,7 +143,6 @@ rule preprocessing:
 	resources:
 		runtime = get_preprocessing_runtime,
 		mem_mb = get_preprocessing_mem_mb
-	group: "fastq"
 	shell:
 		"set -x \n"
 
@@ -212,7 +212,6 @@ rule preprocessing:
 		
 rule alignment:
 	input:
-		ref_genome = REF_GENOME,
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
 	output:
@@ -234,7 +233,6 @@ rule alignment:
 	resources:
 		runtime = get_alignment_runtime,
 		mem_mb = get_alignment_mem_mb
-	group: "bam"
 	shell:
 		# Map mappable parts of R1 to reference genome
 		"bwa mem -t {params.cores} {params.RG_ID} {REF_GENOME} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
@@ -296,11 +294,9 @@ rule Ntag:
 		"benchmarks/Ntag/{sample}.tsv"
 	params:
 		adapter = lambda wildcards: samples.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC"
-	threads: 1
 	resources:
 		runtime = get_Ntag_runtime,
 		mem_mb = get_Ntag_mem_mb
-	group: "fastq"
 	shell:
 		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - "
 			"> {output.Ntag_pre_fastq2} \n"
@@ -324,7 +320,6 @@ rule gmotif:
 	resources:
 		runtime = get_gmotif_runtime,
 		mem_mb = get_gmotif_mem_mb
-	group: "fastq"
 	shell:
 		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
 			"seqtk seq -a - | "
@@ -345,7 +340,6 @@ rule junction_spanning:
 	resources:
 		runtime = get_junction_spanning_runtime,
 		mem_mb = get_min_mem_mb
-	group: "fastq"
 	shell:
 		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
 			"{input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
@@ -365,7 +359,6 @@ rule extract_clipping:
 	resources:
 		runtime = get_extract_clipping_runtime,
 		mem_mb = get_extract_clipping_mem_mb
-	group: "bam"
 	run:
 		ofasta5p=gzip.open(output.softclip5p_fasta, 'wt')
 		otable5p=open(output.hardclip5p_table, 'w')
@@ -425,7 +418,6 @@ rule peak_calling:
 	input:
 		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
 		hg38 = HG38,
-		ref_genome = REF_GENOME
 	output:
 		peaks = "{sample}/{sample}_peaks.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
@@ -857,12 +849,11 @@ rule map_transduction_fasta:
 	input:
 		classified_peaks = "{sample}/{sample}_classified_peaks.bed",
 		L1HS_decoy = L1HS_DECOY,
-		ref_genome = REF_GENOME,
 		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz",
 		softclip5p_fasta = "{sample}/{sample}_softclip_5p.fa.gz",
 		hardclip3p_table = "{sample}/{sample}_hardclip_3p.tsv",
 		hardclip5p_table = "{sample}/{sample}_hardclip_5p.tsv",
-		cutadapt_report = "{sample}/{sample}_cutadapt_report.txt"
+		#cutadapt_report = "{sample}/reports/{sample}_cutadapt_report.txt"
 	output:
 		transduction_bed =  "{sample}/{sample}_custom_transduction.bed",
 		transduction_fasta = "{sample}/{sample}_custom_transduction.fasta",
@@ -874,7 +865,8 @@ rule map_transduction_fasta:
 		softclip3p_trimmed_bed = "{sample}/{sample}_softclip_3p_trimmed.bed",
 		softclip5p_trimmed_bed = "{sample}/{sample}_softclip_5p_trimmed.bed",
 		hardclip3p_bed = "{sample}/{sample}_hardclip_3p.bed",
-		hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed"
+		hardclip5p_bed = "{sample}/{sample}_hardclip_5p.bed",
+		transduction_report = "{sample}/reports/{sample}_transduction_report.txt"
 	benchmark:
 		"benchmarks/map_transduction_fasta/{sample}.tsv"
 	params:
@@ -904,11 +896,11 @@ rule map_transduction_fasta:
 		"cutadapt -g X{params.adapter_T} -m {params.min_length} "
 			"-o {output.softclip3p_trimmed_fasta} "
 			"{input.softclip3p_fasta} "
-			">> {input.cutadapt_report} \n"
+			">> {output.transduction_report} \n"
 		"cutadapt -a {params.adapter_T}X -m {params.min_length} "
 			"-o {output.softclip5p_trimmed_fasta} "
 			"{input.softclip5p_fasta} "
-			">> {input.cutadapt_report} \n"
+			">> {output.transduction_report} \n"
 
 		"bwa mem -t {threads} {params.RG_ID} {output.transduction_fasta} {output.softclip3p_trimmed_fasta} | "
 			"samtools sort -o {output.softclip3p_trimmed_bam}  \n"
