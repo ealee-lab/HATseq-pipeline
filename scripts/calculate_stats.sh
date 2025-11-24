@@ -2,7 +2,7 @@
 
 # Calculate precision, recall, and F1 score for each sample.
 
-peak_file=$1 # Path to candidate_peaks.tsv intersected with ground truth set (GTS)
+peak_file=$1 # Path to classified_peaks.bed intersected with ground truth set (GTS)
 true_peaks=$2 # Path to GTS
 out_file=$3 # Path to output file with statistics
 
