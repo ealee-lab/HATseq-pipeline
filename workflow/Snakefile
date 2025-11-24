@@ -61,7 +61,7 @@ rule HATseq:
 		"{sample}/{sample}_peak_sorted_bwa.bam",
 		"{sample}/{sample}_Ntag_list.txt",
 		"{sample}/{sample}_pass_gmotif_list.txt",
-		"{sample}/{sample}_polyA_trimmed.txt",
+		"{sample}/{sample}_polyT_reads.txt",
 		"{sample}/{sample}_peaks.bed",
 		"{sample}/{sample}_unique_start_positions.bed",
 		"{sample}/{sample}_chimera_hash.txt",
@@ -70,7 +70,7 @@ rule HATseq:
 		"{sample}/{sample}_classified_peaks.bed",
 		"{sample}/{sample}_custom_transduction.fasta",
 		"{sample}/{sample}_transduction_plots.pdf",
-		"all_{donor}_candidate_peaks.bed"
+		"{donor}_multi_peaks.bed"
 		],
 		sample=samples.index,
 		donor=samples["donor"].unique()) 
@@ -212,6 +212,7 @@ rule preprocessing:
 		
 rule alignment:
 	input:
+		ref_genome = REF_GENOME,
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
 	output:
@@ -235,15 +236,16 @@ rule alignment:
 		mem_mb = get_alignment_mem_mb
 	shell:
 		# Map mappable parts of R1 to reference genome
-		"bwa mem -t {params.cores} {params.RG_ID} {REF_GENOME} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.bwa_bam} \n"
 		"samtools sort -o {output.bwa_sorted_bam} {output.bwa_bam} \n"
 		"samtools index {output.bwa_sorted_bam} \n"
 
-		"bwa mem -t {params.cores} {params.RG_ID} {REF_GENOME} {input.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} | "
+		"bwa mem -t {threads} {params.RG_ID} {input.ref_genome} {input.mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1} | "
 			"samtools view -Sb - "
 			"> {output.trim_bwa_bam} \n"
+			
 		# Unique read = read with MAPQ >= 20 and edit distance < 4
 		"samtools view -q 20 {output.trim_bwa_bam} | "
 			"awk '{{ for (i=1;i<=NF;i++) "
@@ -326,25 +328,6 @@ rule gmotif:
 			"grep 'CTTAGAGT' -B 1 | "
 			"seqkit seq -i -n - | sort | uniq "
 			"> {output.pass_gmotif_list} \n"
-
-rule junction_spanning:
-	input:
-		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz"
-	output:
-		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt"
-	benchmark:
-		"benchmarks/junction_spanning/{sample}.tsv"
-	params:
-		max_err = 0,
-		adapter_T = "TTTTTTTT" 
-	resources:
-		runtime = get_junction_spanning_runtime,
-		mem_mb = get_min_mem_mb
-	shell:
-		"cutadapt -a {params.adapter_T} -e {params.max_err} --discard-untrimmed "
-			"{input.mappable_R1_L1HSseq_trimmed_fromR1_fastq1} | "
-			"seqkit seq -i -n - "
-			"> {output.polyA_trimmed} \n"
 	
 rule extract_clipping:
 	input:	
@@ -374,7 +357,7 @@ rule extract_clipping:
 			reverse = (read.flag & 16 == 16) 
 			if "S" in read.cigarstring:
 				if read.cigartuples[0][0] == 4 :
-					if reverse: #reverse read and clip is at reference 3' = 5' clipping
+					if reverse: # reverse read and clip is at reference 3' = 5' clipping
 						ofasta3p.write(">" + read.query_name + "\n")
 						ofasta3p.write(reverse_complement(read.query_sequence[0:read.query_alignment_start-1]) + "\n")
 					else:
@@ -414,9 +397,29 @@ rule extract_clipping:
 		ofasta3p.close()
 		otable3p.close()	
 
+rule junction_spanning:
+	input:
+		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz"
+	output:
+		polyT_reads = "{sample}/{sample}_polyT_reads.txt"
+	benchmark:
+		"benchmarks/junction_spanning/{sample}.tsv"
+	params:
+		adapter_T = "TTTTTTTT" 
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb
+	shell:
+		"zcat {input.softclip3p_fasta} | "
+			"grep {params.adapter_T} -B 1 | "
+			"grep '>' | "
+			"awk '{{gsub(/>/,\"\",$1); print}}' "
+			"> {output.polyT_reads}"
+
 rule peak_calling:
 	input:
 		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
+		ref_genome = REF_GENOME,
 		hg38 = HG38,
 	output:
 		peaks = "{sample}/{sample}_peaks.bed",
@@ -469,10 +472,10 @@ rule peak_calling:
 					"{{print $1,$2,$2+1,$4,$5,$6}} "
 				"else "
 					"{{print $1,$3,$3+1,$4,$5,$6}} }}' {output.peaks}) | "
-			"bedtools getfasta -fi {REF_GENOME} -bed stdin -name "
+			"bedtools getfasta -fi {input.ref_genome} -bed stdin -name "
 			"> {output.breakpoint_fa} \n"
 
-		"bedtools getfasta -fi {REF_GENOME} -bed {output.peaks} -name > {output.peak_seq} \n"
+		"bedtools getfasta -fi {input.ref_genome} -bed {output.peaks} -name > {output.peak_seq} \n"
 
 rule count_templates:
 	input:
@@ -748,7 +751,7 @@ rule create_big_table:
 		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
 		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		polyA_trimmed = "{sample}/{sample}_polyA_trimmed.txt",
+		polyT_reads = "{sample}/{sample}_polyT_reads.txt",
 		misalignment = "{sample}/{sample}_misalignment.txt"
 	output:
 		big_table = "{sample}/{sample}_big_table.tsv"
@@ -763,7 +766,7 @@ rule create_big_table:
 		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 		readIDs = readIDs.merge(Ntag, how="left", on="read")
 		del Ntag
-		polyA = pd.read_table(input.polyA_trimmed, sep="\t",header=None, names=["read"])
+		polyA = pd.read_table(input.polyT_reads, sep="\t",header=None, names=["read"])
 		polyA["polyA"] = "pass_" + polyA['read']
 		readIDs = readIDs.merge(polyA, how="left", on="read").fillna('fail')
 		del polyA
@@ -791,9 +794,9 @@ rule create_big_table:
 		big_table = big_table.merge(chimeras, how="left", on="peak_name")
 		del chimera, chimeras, nonchimera, misalignment
 		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
-		big_table = big_table.merge(intersect[['peak_name', 'RepeatMasker', 'Evrony_KR', 'Homopolymers', 
-											   '1000_Genomes_Project', 'gnomAD', 'NyuWa', 'xTea', 
-											   'HGSVC3', 'HGSVC3-MELT-LRA', '1019_ONT']], 
+		big_table = big_table.merge(intersect[['peak_name','RepeatMasker','Evrony_KR','Homopolymers', 
+											   '1000_Genomes_Project','gnomAD','NyuWa','xTea', 
+											   'HGSVC3','HGSVC3-MELT-LRA','1019_ONT']], 
 											   how="left", on="peak_name")
 		del intersect  
 		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
@@ -848,6 +851,7 @@ rule filter_and_classify:
 rule map_transduction_fasta:
 	input:
 		classified_peaks = "{sample}/{sample}_classified_peaks.bed",
+		ref_genome = REF_GENOME,
 		L1HS_decoy = L1HS_DECOY,
 		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz",
 		softclip5p_fasta = "{sample}/{sample}_softclip_5p.fa.gz",
@@ -888,7 +892,7 @@ rule map_transduction_fasta:
 			"> {output.transduction_bed} \n"
 
 		# Everything is with respect to the reference at this point, fasta of loci and fasta of softclipped reads
-		"bedtools getfasta -fi {REF_GENOME} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" 
+		"bedtools getfasta -fi {input.ref_genome} -bed {output.transduction_bed} -name > {output.transduction_fasta} \n" 
 		
 		"cat {input.L1HS_decoy} >> {output.transduction_fasta} \n" 
 		"bwa index {output.transduction_fasta} \n"
@@ -1025,19 +1029,19 @@ rule multi_sample_classification:
 	benchmark:
 		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
-		num_tissues = lambda wildcards, input: len(input.sample_peaks)
+		num_samples = lambda wildcards, input: len(input.sample_peaks)
 	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_filter_and_classify_mem_mb,
+		runtime = 10, #get_min_runtime,
+		mem_mb = 4000 #get_filter_and_classify_mem_mb,
 	group: "classify"
 	shell:
-		"if [[ {params.num_tissues} -ge 3 ]]; then "
+		"if [[ {params.num_samples} -ge 3 ]]; then "
 			"python {workflow.basedir}/scripts/multi_classify.py "
-				"-f {input.sample_peaks} "
-				"-n {params.num_tissues} "
 				"-d {wildcards.donor} "
+				"-f {input.sample_peaks} "
 				"-p {output.donor_peaks} "
 				"-m {output.multi_peaks}; "
 		"else "
 			"touch {output.donor_peaks} && touch {output.multi_peaks}; "
 		"fi"	
+		
