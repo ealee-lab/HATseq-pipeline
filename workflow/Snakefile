@@ -411,9 +411,7 @@ rule junction_spanning:
 		mem_mb = get_min_mem_mb
 	shell:
 		"zcat {input.softclip3p_fasta} | "
-			"grep {params.adapter_T} -B 1 | "
-			"grep '>' | "
-			"awk '{{gsub(/>/,\"\",$1); print}}' "
+			"awk -v RS='>' -F '\n' 'substr($2,1,30) ~ \"{params.adapter_T}\" {{print $1}}' "
 			"> {output.polyT_reads}"
 
 rule peak_calling:
@@ -1040,8 +1038,11 @@ rule multi_sample_classification:
 				"-d {wildcards.donor} "
 				"-f {input.sample_peaks} "
 				"-p {output.donor_peaks} "
-				"-m {output.multi_peaks}; "
+				"-m {output.multi_peaks} \n"
 		"else "
-			"touch {output.donor_peaks} && touch {output.multi_peaks}; "
+			"touch {output.multi_peaks} \n"
+			"echo 'chrm\tstart\tend\tpeak\tRPM\tstrand\tclassification\tfilter_reason' "
+				"> {output.donor_peaks} \n"
+			"cat {input.sample_peaks} >> {output.donor_peaks} \n"
 		"fi"	
 		
