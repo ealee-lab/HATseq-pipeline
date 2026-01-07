@@ -19,6 +19,7 @@ TE_NAME = config["te_name"]
 REF_GENOME = config["bwa_ref_genome"]
 REFERENCE_DIR = config["reference_dir"]
 ERROR_PRONE = config.get("error_prone", "-NA-") # optional
+TRUTH_SET = config.get("truth_set", "-NA-") # optional
 LIBRARY = config["library"]
 SEQ_PLATFORM = config['sequencing_platform']
 SEQ_CENTER = config['sequencing_center']
@@ -829,7 +830,8 @@ rule filter_and_classify:
 	benchmark:
 		"benchmarks/filter_and_classify/{sample}.tsv"
 	params: 
-		truth_set = lambda wildcards: samples.loc[wildcards.sample]["truth_set"], # optional 
+		error_prone = ERROR_PRONE,
+		truth_set = TRUTH_SET, 
 		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
 	conda:
 		"envs/plotR.yml"
@@ -840,9 +842,9 @@ rule filter_and_classify:
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
 			"{input.big_table} {LIBRARY} {output.plots} {output.classified_peaks} {output.summary_file} "
-			"{ERROR_PRONE} {params.truth_set} \n"
+			"{params.error_prone} {params.truth_set} \n"
 		"grep -E 'UNK|SOM' {output.classified_peaks} | "
-			"awk -v OFS='\t' 'NR>1 {{print $1,$2,$3,$4}}' | "
+			"awk -v OFS='\t' '{{print $1,$2,$3,$4}}' | "
 			"bedtools igv -name -slop 200 -path {params.path} -i stdin "
 			"> {output.igv_script}"
 

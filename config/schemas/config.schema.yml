@@ -17,6 +17,9 @@ properties:
   error_prone:
     type: string
     description: path to .bed file of error-prone regions
+  truth_set:
+    type: string
+    description: path to .bed file of true insertions
   library:
     type: string
     description: library type (bulk, single, microbulk)
