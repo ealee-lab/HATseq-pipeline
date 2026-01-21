@@ -830,6 +830,7 @@ rule filter_and_classify:
 	benchmark:
 		"benchmarks/filter_and_classify/{sample}.tsv"
 	params: 
+		library = LIBRARY,
 		error_prone = ERROR_PRONE,
 		truth_set = TRUTH_SET, 
 		path = lambda wildcards: os.getcwd() + f"/{wildcards.sample}/igv/"
@@ -841,7 +842,8 @@ rule filter_and_classify:
 	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {LIBRARY} {output.plots} {output.classified_peaks} {output.summary_file} "
+			"{input.big_table} {params.library} {output.plots} "
+			"{output.classified_peaks} {output.summary_file} "
 			"{params.error_prone} {params.truth_set} \n"
 		"grep -E 'UNK|SOM' {output.classified_peaks} | "
 			"awk -v OFS='\t' '{{print $1,$2,$3,$4}}' | "
