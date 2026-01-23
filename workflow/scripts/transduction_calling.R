@@ -90,37 +90,42 @@ circos_table_novel <- circos_table[circos_table$classification1 %in% c("UNK","SO
 
 pdf(plots_path)
 
-par(mar = c(1, 1, 4, 1))
-circos.initializeWithIdeogram(species = "hg38")
+if (nrow(circos_table_polymorphic) != 0) {
+  par(mar = c(1, 1, 4, 1))
+  circos.initializeWithIdeogram(species = "hg38")
 
-for (i in 1:nrow(circos_table_polymorphic)) {
-  circos.link(
-    sector.index1 = circos_table_polymorphic$chrom1[i],
-    point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
-    sector.index2 = circos_table_polymorphic$chrom2[i],
-    point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
-    col = "blue",
-    directional = -1
-  )
+  for (i in 1:nrow(circos_table_polymorphic)) {
+    circos.link(
+      sector.index1 = circos_table_polymorphic$chrom1[i],
+      point1 = c(circos_table_polymorphic$start1[i], circos_table_polymorphic$end1[i]),
+      sector.index2 = circos_table_polymorphic$chrom2[i],
+      point2 = c(circos_table_polymorphic$start2[i], circos_table_polymorphic$end2[i]),
+      col = "blue",
+      directional = -1
+    )
+  }
+  title("Polymorphic Insertions with Transductions", cex.main = 1.5)
+
+  circos.clear()
 }
-title("Polymorphic Insertions with Transductions", cex.main = 1.5)
 
-circos.clear()
+if (nrow(circos_table_novel) != 0) {
+  par(mar = c(1, 1, 4, 1))
+  circos.initializeWithIdeogram(species = "hg38")
 
-par(mar = c(1, 1, 4, 1))
-circos.initializeWithIdeogram(species = "hg38")
+  for (i in 1:nrow(circos_table_novel)) {
+    circos.link(
+      sector.index1 = circos_table_novel$chrom1[i],
+      point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
+      sector.index2 = circos_table_novel$chrom2[i],
+      point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
+      col = "red",
+      directional = -1
+    )
+  }
+  title("Novel Insertions with Transductions", cex.main = 1.5)
 
-for (i in 1:nrow(circos_table_novel)) {
-  circos.link(
-    sector.index1 = circos_table_novel$chrom1[i],
-    point1 = c(circos_table_novel$start1[i], circos_table_novel$end1[i]),
-    sector.index2 = circos_table_novel$chrom2[i],
-    point2 = c(circos_table_novel$start2[i], circos_table_novel$end2[i]),
-    col = "red",
-    directional = -1
-  )
+  circos.clear()
 }
-title("Novel Insertions with Transductions", cex.main = 1.5)
 
-circos.clear()
 dev.off()

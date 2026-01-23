@@ -1,6 +1,7 @@
 /*
 *.err
 *.out
+*.txt
 *__pycache__
 !config
 !reference
