@@ -11,17 +11,13 @@ library(ggsci)
 args <- commandArgs(TRUE)
 
 big_table_file <- args[1]
-library <- args[2]
-plots_path <- args[3]
-classified_peaks <- args[4]
-summary <- args[5]
-error_prone <- args[6]
-truth_set <- args[7]
-
-big_table_filter_annotation_file <- paste0(
-  sub("_classified_peaks.bed$", "", classified_peaks), 
-  "_big_table_filter_reasons.tsv"
-)
+filter_reasons_file <- args[2]
+library <- args[3]
+plots_path <- args[4]
+classified_peaks <- args[5]
+summary <- args[6]
+error_prone <- args[7]
+truth_set <- args[8]
 
 # Read input and define columns
 canonical_chrs <- c(
@@ -193,13 +189,13 @@ if (library != "bulk") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & grepl("ALR/Alpha",big_table$repeatmasker)] <- "ALR/Alpha"
   big_table$FP[big_table$filter_reason == "ALR/Alpha"] <- TRUE
   cat(
-    paste0("ALR/Alpha Satellite overlapping: ", 
+    paste0("\t\tALR/Alpha Satellite overlapping: ", 
       nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),
       file=summary_file,
       sep="\n"
   )
 
-  big_table$filter_reason[!(big_table$FP) & (big_table$templates_per_million < 0.2)] <- "templates"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$templates_per_million < 0.2)] <- "templates"
   big_table$FP[big_table$filter_reason == "templates"] <- TRUE
   cat(
     paste0("\t\tToo few templates: ", 
@@ -208,7 +204,7 @@ if (library != "bulk") {
     sep="\n"
   )
 
-  big_table$filter_reason[!(big_table$FP) & (big_table$template_ratio < 0.25)] <- "template_ratio"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.25)] <- "template_ratio"
   big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
   cat(
     paste0("\t\tTemplate ratio: ",
@@ -268,12 +264,8 @@ if (library == "bulk") {
   big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$templates_per_million >= 4] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
-} else if (library == "single") {
+} else {
   big_table$classification[big_table$classification == "Candidate"] <- "SOM" # need multiple cells to distinguish
-} else if (library == "micro") { # TODO: Examine criteria
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 5] <- "UNK"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
-  big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
 }
 
 # Filter out SOM peaks in error-prone regions if regions are provided
@@ -551,7 +543,7 @@ write.table(
 )
 write.table(
   big_table[, lapply(big_table, class) != "list"], 
-  big_table_filter_annotation_file, 
+  filter_reasons_file, 
   sep="\t", 
   row.names=FALSE, 
   col.names=TRUE, 

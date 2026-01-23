@@ -5,24 +5,24 @@ import pandas as pd
 import pybedtools
 from pybedtools import BedTool
 
-def concat_bed_by_donor(donor_tables: dict):
-    """Concatenate tissue-specific candidate peaks such that each donor has a 
-    dataframe with all peaks."""
-    donor_beds = []
+# def concat_bed_by_donor(donor_tables: dict):
+#     """Concatenate tissue-specific candidate peaks such that each donor has a 
+#     dataframe with all peaks."""
+#     donor_beds = []
 
-    for donor in donor_tables:
-        beds = []
-        for table in donor_tables[donor]:
-            bed = pd.read_csv(table, sep="\t", 
-                              usecols = ["chrm","start","end","peak","RPM","strand","classification"])
-            bed = bed[bed["classification"].isin(["FP","UNK","SOM_clonal","SOM_private"])]
-            bed = bed[["chrm","start","end","peak","RPM","strand"]]
-            beds.append(bed)
-        donor_bed = pd.concat(beds)
-        donor_bed = donor_bed.sort_values(by=["chrm","start"], ascending=True)
-        donor_beds.append(donor_bed)
+#     for donor in donor_tables:
+#         beds = []
+#         for table in donor_tables[donor]:
+#             bed = pd.read_csv(table, sep="\t", 
+#                               usecols = ["chrm","start","end","peak","RPM","strand","classification"])
+#             bed = bed[bed["classification"].isin(["FP","UNK","SOM_clonal","SOM_private"])]
+#             bed = bed[["chrm","start","end","peak","RPM","strand"]]
+#             beds.append(bed)
+#         donor_bed = pd.concat(beds)
+#         donor_bed = donor_bed.sort_values(by=["chrm","start"], ascending=True)
+#         donor_beds.append(donor_bed)
 
-    return donor_beds
+#     return donor_beds
 
 def merge_and_filter_peaks(donor_beds: list):
     """Merge peaks across tissues for each donor."""
@@ -59,18 +59,22 @@ if __name__ == "__main__":
 
     with open(args.donor_list, "r") as f:
         donors = [l.strip() for l in f.readlines()]
-    
-    donor_tables = {}
-    for donor in donors:
-        tables = glob.glob(
-            f"{os.path.normpath(args.resdir)}/*{donor}*/*{donor}*classified_peaks.bed")
-        
-        if tables != []: # if files exist for donor
-            donor_tables[donor] = tables
-        else:
-            continue 
 
-    donor_beds = concat_bed_by_donor(donor_tables)
+    donor_beds = []
+    for donor in donors:
+        peak_file = glob.glob(
+            f"{os.path.normpath(args.resdir)}/all*{donor}*classified_peaks.bed")
+        
+        donor_bed = pd.read_csv(peak_file[0],
+                                sep="\t",
+                                usecols=[0,1,2,3,4,5,6,7]).sort_values(by=["chrm","start"])
+        donor_bed = donor_bed[(donor_bed["classification"] == "UNK") |
+                              (donor_bed["classification"].str.contains("SOM")) |
+                              (donor_bed["classification"] == "FP")]
+        donor_bed = donor_bed[donor_bed["filter_reason"] != "nearby_peak"]
+        donor_beds.append(donor_bed)
+    
+    # donor_beds = concat_bed_by_donor(donor_tables)
     merge_beds = merge_and_filter_peaks(donor_beds)
     err_regions = intersect_donor_peaks(merge_beds)
     err_regions.to_csv(f"{args.outfile}", sep="\t", header=False, index=False)

@@ -65,7 +65,7 @@ rule HATseq:
 		"{sample}/{sample}_polyT_reads.txt",
 		"{sample}/{sample}_peaks.bed",
 		"{sample}/{sample}_unique_start_positions.bed",
-		"{sample}/{sample}_chimera_hash.txt",
+		# "{sample}/{sample}_chimera_hash.txt",
 		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_big_table.tsv",
 		"{sample}/{sample}_classified_peaks.bed",
@@ -636,7 +636,7 @@ rule chimera_hash:
 				peak_hash = []
 				for key in hash:
 					# Get percent of total possible dimers for each unique dimer
-					peak_hash.append(str(seq.count(key) / (len(seq) -2))) 
+					peak_hash.append(str(seq.count(key) / (len(seq) - 2))) 
 				chim.write(peak + "\t" + "\t".join(peak_hash)  + "\t" + str(len(seq)) + "\n")
 				peak = seqs.readline().strip("\n").strip(">")
 				seq = seqs.readline().strip("\n").upper()
@@ -825,8 +825,8 @@ rule filter_and_classify:
 		filter_reasons = "{sample}/{sample}_big_table_filter_reasons.tsv",
 		classified_peaks = "{sample}/{sample}_classified_peaks.bed",
 		plots = "{sample}/{sample}_filtering_plots.pdf",
-		igv_script = "{sample}/{sample}_igv.sh",
-		summary_file = "{sample}/{sample}_summary.txt"
+		summary_file = "{sample}/{sample}_summary.txt",
+		igv_script = "{sample}/{sample}_igv.sh"
 	benchmark:
 		"benchmarks/filter_and_classify/{sample}.tsv"
 	params: 
@@ -842,7 +842,8 @@ rule filter_and_classify:
 	group: "classify"
 	shell:
 		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {params.library} {output.plots} "
+			"{input.big_table} {output.filter_reasons} "
+			"{params.library} {output.plots} "
 			"{output.classified_peaks} {output.summary_file} "
 			"{params.error_prone} {params.truth_set} \n"
 		"grep -E 'UNK|SOM' {output.classified_peaks} | "
@@ -1026,8 +1027,8 @@ rule multi_sample_classification:
 		sample_peaks = lambda wildcards: expand("{name}/{name}_classified_peaks.bed", 
 												  name=get_donor_samples(wildcards, samples))
 	output:
-		donor_peaks = "all_{donor}_candidate_peaks.bed",
-		multi_peaks = "{donor}_multi_peaks.bed"
+		donor_peaks = "all_{donor}_classified_peaks.bed",
+		multi_peaks = "{donor}_multi_peaks.bed",
 	benchmark:
 		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
