@@ -1034,8 +1034,8 @@ rule multi_sample_classification:
 	params:
 		num_samples = lambda wildcards, input: len(input.sample_peaks)
 	resources:
-		runtime = 10, #get_min_runtime,
-		mem_mb = 4000 #get_filter_and_classify_mem_mb,
+		runtime = get_min_runtime,
+		mem_mb = get_filter_and_classify_mem_mb,
 	group: "classify"
 	shell:
 		"if [[ {params.num_samples} -ge 3 ]]; then "
@@ -1046,8 +1046,11 @@ rule multi_sample_classification:
 				"-m {output.multi_peaks} \n"
 		"else "
 			"touch {output.multi_peaks} \n"
-			"echo 'chrm\tstart\tend\tpeak\tRPM\tstrand\tclassification\tfilter_reason' "
-				"> {output.donor_peaks} \n"
-			"cat {input.sample_peaks} >> {output.donor_peaks} \n"
+			" echo {input.sample_peaks[0]} > {output.donor_peaks} \n"
+			# "echo 'chrm\tstart\tend\tpeak\tRPM\tstrand\tclassification\tfilter_reason' "
+			# 	"> {output.donor_peaks} \n"
+			"cat {input.sample_peaks[1:]} | "
+				"grep -v 'chrm' " # remove headers
+				">> {output.donor_peaks} \n"
 		"fi"	
 		
