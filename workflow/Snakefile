@@ -35,7 +35,7 @@ validate(config, config_schema)
 validate(samples, sample_schema)
 
 # Format metadata
-set_sample_names(samples, LIBRARY)
+set_sample_names(samples)
 samples = samples.set_index("sample_name", drop=False)
 
 # Create reference file constants
@@ -1046,10 +1046,10 @@ rule multi_sample_classification:
 				"-m {output.multi_peaks} \n"
 		"else "
 			"touch {output.multi_peaks} \n"
-			" echo {input.sample_peaks[0]} > {output.donor_peaks} \n"
+			"echo \"$(head -n 1 {input.sample_peaks[0]})\" > {output.donor_peaks} \n"
 			# "echo 'chrm\tstart\tend\tpeak\tRPM\tstrand\tclassification\tfilter_reason' "
 			# 	"> {output.donor_peaks} \n"
-			"cat {input.sample_peaks[1:]} | "
+			"cat {input.sample_peaks} | "
 				"grep -v 'chrm' " # remove headers
 				">> {output.donor_peaks} \n"
 		"fi"	

@@ -53,7 +53,7 @@ big_table$RPM_log <- log(big_table$RPM)
 big_table$number_templates <- as.numeric(
   unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 1))
 )
-big_table$templates_per_million <- (big_table$number_templates / big_table$bamreads) * 1000000
+big_table$TPM <- (big_table$number_templates / big_table$bamreads) * 1000000
 big_table$template_ratio <- NA
 template_list <- lapply(
   strsplit(big_table$usp[big_table$number_templates > 1], ";"), `[[`, 2)
@@ -195,7 +195,17 @@ if (library != "bulk") {
       sep="\n"
   )
 
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$templates_per_million < 0.2)] <- "templates"
+  # Require multi-template support for PTA libraries
+  if (library == "single") {
+    big_table$filter_reason[(big_table$candidate) & 
+                            !(big_table$FP) & 
+                            (big_table$TPM < 0.2)] <- "templates"
+  } else {
+    big_table$filter_reason[(big_table$candidate) &
+                            !(big_table$FP) & 
+                            (big_table$number_templates < 2)] <- "templates"
+  }
+
   big_table$FP[big_table$filter_reason == "templates"] <- TRUE
   cat(
     paste0("\t\tToo few templates: ", 
@@ -232,12 +242,15 @@ cat(
   sep="\n"
 )
 
-if (library == "bulk") {
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <- "RPM"
-} else {
+if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.2)] <- "polyApercent"
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"
+} else if (library == "micro") {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.1)] <- "polyApercent"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <-"RPM"
+} else {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <- "RPM"
 }
 
 big_table$FP[big_table$filter_reason == "polyApercent"] <- TRUE
@@ -261,9 +274,12 @@ big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 
 # Label candidate peaks as UNK/SOM
 if (library == "bulk") {
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$templates_per_million >= 4] <- "UNK"
+  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates > 1] <- "SOM_clonal"
   big_table$classification[big_table$classification == "Candidate" & big_table$number_templates == 1] <- "SOM_private"
+} else if (library == "micro") {
+  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
+  big_table$classification[big_table$classification == "Candidate"] <- "SOM"
 } else {
   big_table$classification[big_table$classification == "Candidate"] <- "SOM" # need multiple cells to distinguish
 }
@@ -399,7 +415,7 @@ filter_RPM <- ggplot(
 
 filter_templates <- ggplot(
   big_table, 
-  aes(x=classification, y=templates_per_million, 
+  aes(x=classification, y=TPM, 
     fill=classification, color=classification)) +
   geom_violin() +
   geom_jitter(height=0, width=0.2) + 

@@ -87,9 +87,6 @@ def reclassify_peaks(merged_df, n):
     ## Re-classify peaks ##
     reclass_df["classification"] = "-NA-"
 
-    # Peak is in one sample
-    reclass_df.loc[reclass_df["num"] == 1, "classification"] = "SOM_private"
-
     # Peak is in some samples
     reclass_df.loc[(reclass_df["num"] > 1) & 
                    (reclass_df["num"] < n), "classification"] = "SOM_clonal"
@@ -196,7 +193,8 @@ if __name__ == "__main__":
         peak_dfs.append(file_df)
     
     # Save true insertion info if benchmarking
-    benchmark_df = pd.concat(benchmark_dfs)
+    if len(benchmark_dfs) != 0:
+        benchmark_df = pd.concat(benchmark_dfs)
 
     peak_bts = [BedTool.from_dataframe(df) for df in peak_dfs]
 

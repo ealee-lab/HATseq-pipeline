@@ -4,14 +4,15 @@ properties:
   donor:
     type: string
     description: donor name/identifier
-  cell:
-    type: string
-    default: "-NA-"
-    description: cell identifier (for single-cell)
   tissue:
     type: string
-    default: "-NA-"
     description: tissue name
+  cell:
+    type: string
+    description: cell identifier (for single-cell)
+  rep:
+    type: string
+    description: name of replicate
   raw_fastq1:
     type: string
     description: path to read 1

@@ -1,15 +1,19 @@
 import pandas as pd
 
 #### Manipulate metadata ####
-def set_sample_names(samples, library):
+def set_sample_names(samples):
 	samples.insert(0, "sample_name", None) 
 
-	if library == "bulk":
-		samples.loc[samples["tissue"] == "-NA-", "sample_name"] = samples["donor"]
-		samples.loc[samples["tissue"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["tissue"]
+	colnames = samples.columns
+
+	if "tissue" in colnames:
+		samples.loc[:, "sample_name"] = samples["donor"] + "-" + samples["tissue"]
+	elif "cell" in colnames:
+		samples.loc[:, "sample_name"] = samples["donor"] + "-" + samples["cell"]
+	elif "rep" in colnames:
+		samples.loc[:, "sample_name"] = samples["donor"] + "_" + samples["rep"]
 	else:
-		samples.loc[samples["cell"] == "-NA-", "sample_name"] = samples["donor"]
-		samples.loc[samples["cell"] != "-NA-", "sample_name"] = samples["donor"] + "-" + samples["cell"]
+		samples.loc[:, "sample_name"] = samples["donor"]
 	return
 
 def get_donor_samples(wildcards, samples):
@@ -71,7 +75,7 @@ def get_map_transduction_fasta_mem_mb(wildcards, attempt):
 	return mb
 
 def get_transduction_big_table_mem_mb(wildcards, input, attempt):
-	mb = 8000 + (1000 * (attempt - 1))
+	mb = 4000 + (2000 * (attempt - 1))
 	return mb
 
 def get_call_transductions_mem_mb(wildcards, attempt):
@@ -84,12 +88,12 @@ def get_min_runtime(wildcards, attempt):
 	return minutes
 	
 def get_qc_runtime(wildcards, input, attempt):
-	minutes = int(input.size_mb / 800) + 10 + (10 * (attempt - 1))
+	minutes = int(input.size_mb / 700) + 10 + (10 * (attempt - 1))
 	return minutes
 
 def get_preprocessing_runtime(wildcards, input, attempt):
 	try:
-		minutes = int(input.size_mb / 400) + 12 + (15 * (attempt - 1))
+		minutes = int(input.size_mb / 333) + 6 + (15 * (attempt - 1))
 	except FileNotFoundError: # occurs during dry run
 		minutes = 60
 	return minutes
@@ -103,7 +107,7 @@ def get_alignment_runtime(wildcards, input, attempt):
 
 def get_Ntag_runtime(wildcards, input, attempt):
 	try:
-		minutes = min(int(input.size_mb / 333) - 4.5 + (5 * (attempt - 1)), 20)
+		minutes = max(int(input.size_mb / 333) - 4.5 + (5 * (attempt - 1)), 2)
 	except FileNotFoundError:
 		minutes = 20
 	return minutes
