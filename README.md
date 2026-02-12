@@ -63,9 +63,9 @@ sbatch run_HATseq-pipeline.sh <config> <outdir> <tmpdir> <profile> # submit job 
 Note that this pipeline was tested with Snakemake 7.32.4, so changes may be necessary to make it compatible with newer Snakemake versions.
 
 # Debugging the Pipeline # 
-One of the most common issues you may come across while running the pipeline are Out of Memory or Timeout errors. Each step in the pipeline has set resource limits based on extensive testing. These limits are implemented so as to optimize job efficiency on HPC clusters, especially when running many samples. 
+One of the most common issues you may come across while running the pipeline are Out of Memory or Timeout errors. Each step in the pipeline has set resource limits based on testing. These limits are implemented so as to optimize job efficiency on HPC clusters, especially when running many samples. 
 
-That being said, if the allocated resources are insufficient, users have several options. Increasing `restart-times` in `workflow/slurm/config.yaml` will increase the number of times rules can be restarted, with each attempt being allocated more resources. 
+That being said, if the allocated resources are insufficient, users have several options. Increasing `restart-times` in `workflow/slurm/config.yaml` will increase the number of times rules can be restarted, with each attempt being allocated double the resources of the previous attempt. 
 
 For a more permanent solution, users should locate the corresponding rule and resource in `rules/common.smk` and increase resources. For example, if the pipeline errors on the preprocessing rule with an Out of Memory error, locate the `get_preprocessing_mem_mb()` function in `common.smk` and type in amount of memory (in MB) you would like to request for that rule.
 
