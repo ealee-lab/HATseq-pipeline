@@ -1,2 +1,2 @@
-donor	tissue	raw_fastq1	raw_fastq2	index_seq	truth-set
-donor	tissue	/path/to/read1	/path/to/read2	4-base_in-line_index	/path/to/file/with/true/insertions
+donor	tissue	raw_fastq1	raw_fastq2	index_seq
+donor	tissue	/path/to/read1	/path/to/read2	4-base_in-line_index

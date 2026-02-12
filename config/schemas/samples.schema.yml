@@ -23,6 +23,8 @@ properties:
     type: string
     description: 4 bp in-line index used during library prep 
 
+additionalProperties: false
+
 required:
   - donor
   - raw_fastq1
