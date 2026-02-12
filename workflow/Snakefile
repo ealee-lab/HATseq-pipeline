@@ -1032,7 +1032,8 @@ rule multi_sample_classification:
 	benchmark:
 		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
-		num_samples = lambda wildcards, input: len(input.sample_peaks)
+		num_samples = lambda wildcards, input: len(input.sample_peaks),
+		replicate = lambda wildcards: "rep" in samples.columns
 	resources:
 		runtime = get_min_runtime,
 		mem_mb = get_filter_and_classify_mem_mb,
@@ -1043,12 +1044,11 @@ rule multi_sample_classification:
 				"-d {wildcards.donor} "
 				"-f {input.sample_peaks} "
 				"-p {output.donor_peaks} "
-				"-m {output.multi_peaks} \n"
+				"-m {output.multi_peaks} "
+				"-r {params.replicate} \n"
 		"else "
 			"touch {output.multi_peaks} \n"
 			"echo \"$(head -n 1 {input.sample_peaks[0]})\" > {output.donor_peaks} \n"
-			# "echo 'chrm\tstart\tend\tpeak\tRPM\tstrand\tclassification\tfilter_reason' "
-			# 	"> {output.donor_peaks} \n"
 			"cat {input.sample_peaks} | "
 				"grep -v 'chrm' " # remove headers
 				">> {output.donor_peaks} \n"
