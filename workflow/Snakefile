@@ -65,7 +65,6 @@ rule HATseq:
 		"{sample}/{sample}_polyT_reads.txt",
 		"{sample}/{sample}_peaks.bed",
 		"{sample}/{sample}_unique_start_positions.bed",
-		# "{sample}/{sample}_chimera_hash.txt",
 		"{sample}/{sample}_intersect_annotated.bed",
 		"{sample}/{sample}_big_table.tsv",
 		"{sample}/{sample}_classified_peaks.bed",
@@ -343,60 +342,8 @@ rule extract_clipping:
 	resources:
 		runtime = get_extract_clipping_runtime,
 		mem_mb = get_extract_clipping_mem_mb
-	run:
-		ofasta5p=gzip.open(output.softclip5p_fasta, 'wt')
-		otable5p=open(output.hardclip5p_table, 'w')
-		ofasta3p=gzip.open(output.softclip3p_fasta, 'wt')
-		otable3p=open(output.hardclip3p_table, 'w')
-		
-		def reverse_complement(seq):
-			complement = {'A':'T', 'T':'A', 'G':'C', 'C':'G', 'N':'N'}
-			return ''.join(complement[base] for base in reversed(seq))
-
-		ibam=pysam.AlignmentFile(input.peak_sorted_bam, 'rb')
-		for read in ibam.fetch(until_eof=True):
-			reverse = (read.flag & 16 == 16) 
-			if "S" in read.cigarstring:
-				if read.cigartuples[0][0] == 4 :
-					if reverse: # reverse read and clip is at reference 3' = 5' clipping
-						ofasta3p.write(">" + read.query_name + "\n")
-						ofasta3p.write(reverse_complement(read.query_sequence[0:read.query_alignment_start-1]) + "\n")
-					else:
-						ofasta5p.write(">" + read.query_name + "\n")
-						ofasta5p.write(read.query_sequence[0:read.query_alignment_start-1] + "\n")	
-				elif read.cigartuples[len(read.cigartuples)-1][0] == 4:
-					if reverse:
-						ofasta5p.write(">" + read.query_name + "\n")
-						ofasta5p.write(reverse_complement(read.query_sequence[read.query_alignment_end+1:read.query_length-1]) + "\n")
-					else:
-						ofasta3p.write(">" + read.query_name + "\n")
-						ofasta3p.write(read.query_sequence[read.query_alignment_end+1:read.query_length-1] + "\n")
-
-			if "H" in read.cigarstring:
-				if read.cigartuples[0][0] == 5:
-					num_alt_mappings = len(read.get_tag("SA").strip(";").split(";"))
-					if num_alt_mappings == 1:
-						uniq_supp_map = read.get_tag("SA").strip(";").split(";")[0].split(",")
-						if int(uniq_supp_map[4]) > 20 and int(uniq_supp_map[5]) < 4: 
-							if reverse:
-								otable3p.write(read.query_name + "\t" + str(uniq_supp_map[0]) + ":" +  str(uniq_supp_map[1]) + "-" + str(int(uniq_supp_map[1]) + int(read.reference_length)) + ":" + uniq_supp_map[2] + "\n")
-							else:
-								otable5p.write(read.query_name + "\t" + str(uniq_supp_map[0]) + ":" +  str(uniq_supp_map[1]) + "-" + str(int(uniq_supp_map[1]) + int(read.reference_length)) + ":" + uniq_supp_map[2] + "\n")
-
-				elif read.cigartuples[len(read.cigartuples)-1][0] == 5:
-					num_alt_mappings = len(read.get_tag("SA").strip(";").split(";"))
-					if num_alt_mappings == 1:
-						uniq_supp_map = read.get_tag("SA").strip(";").split(";")[0].split(",")
-						if int(uniq_supp_map[4]) > 20 and int(uniq_supp_map[5]) < 4:
-							if reverse:
-								otable5p.write(read.query_name + "\t" + str(uniq_supp_map[0]) + ":" +  str(uniq_supp_map[1]) + "-" + str(int(uniq_supp_map[1]) + int(read.reference_length)) + ":" + uniq_supp_map[2] + "\n")
-							else:
-								otable3p.write(read.query_name + "\t" + str(uniq_supp_map[0]) + ":" +  str(uniq_supp_map[1]) + "-" + str(int(uniq_supp_map[1]) + int(read.reference_length)) + ":" + uniq_supp_map[2] + "\n")		
-
-		ofasta5p.close()
-		otable5p.close()
-		ofasta3p.close()
-		otable3p.close()	
+	script:
+		"scripts/extract_clipping.py"
 
 rule junction_spanning:
 	input:
@@ -489,60 +436,8 @@ rule count_templates:
 		runtime = get_count_templates_runtime,
 		mem_mb = get_count_templates_mem_mb
 	group: "peaks"
-	run:
-		ibam=pysam.AlignmentFile(input.peak_sorted_bam,'rb')
-		ibed=open(input.peaks, 'r')
-		obed=open(output.unique_start_positions, 'w')
-		header = ["#peak_name", "num_bam_reads", "num_peak_reads", "num_usp;depth", 
-				  "max_neighbor_difference", "median_neighbor_difference", "mean_neighbor_difference"]
-		obed.write("\t".join(header) + "\n")
-		ibam_total_reads = sum([i[3] for i in ibam.get_index_statistics()])
-		peak_readID_list = []
-		for peak_line in ibed:
-			if peak_line.startswith("#"):
-				continue
-			peak = peak_line.strip().split("\t")
-			peak_iter = ibam.fetch(peak[0], int(peak[1]), int(peak[2]))
-			this_peak_usp_dictionary = {}
-			for read in peak_iter:
-				if read.is_reverse:
-					key = read.reference_name + ":" + str(read.reference_end)
-				else:
-					key = read.reference_name + ":" + str(read.reference_start)
-
-				if peak[5] == "-":
-					if read.is_reverse:
-						if not key in this_peak_usp_dictionary.keys():
-							this_peak_usp_dictionary[key] = (0,0)
-						peak_readID_list.append([peak[3], read.query_name])
-
-						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-														 this_peak_usp_dictionary[key][1]+1)
-				elif peak[5] == "+":
-					if not read.is_reverse:
-						if not key in this_peak_usp_dictionary.keys():
-							this_peak_usp_dictionary[key] = (0,0)
-						peak_readID_list.append([peak[3], read.query_name])
-
-						this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-														 this_peak_usp_dictionary[key][1]+1)
-			this_peak_total_reads = sum([this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()])
-			duplicates_list = [this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()]
-			difference_list = []
-			if(len(duplicates_list) > 1):
-				for i in range(0,len(duplicates_list)-1):
-					difference_list.append(abs(duplicates_list[i] - duplicates_list[i+1]))
-			else:
-				difference_list = [-1]
-
-			duplicates_list.sort(reverse=True)
-
-			obed.write(peak[3] + "\t" + str(ibam_total_reads) + "\t" + str(this_peak_total_reads) + "\t" + str(len(this_peak_usp_dictionary.keys())) + ";" + ",".join(map(str, duplicates_list)) + "\t" + str(max(difference_list)) + "\t" + str(statistics.median(difference_list)) + "\t" + str(statistics.mean(difference_list)) + "\n") 
-		with open(output.peak_readID_list, 'w') as list:
-			for peak_read in peak_readID_list:
-				list.write("\t".join(peak_read) + "\n")
-		obed.close()
-		ibed.close()
+	script:
+		"scripts/count_templates.py"
 
 rule chimera:
 	input:
@@ -558,88 +453,8 @@ rule chimera:
 		runtime = get_min_runtime,
 		mem_mb = get_min_mem_mb,
 	group: "peaks"
-	run:
-		chimera_list = []
-		nonchimera_list = []
-		misalignment_list = []
-		with open(input.breakpoint_fa) as fa:
-			peak = fa.readline().strip("\n").strip(">")
-			seq = fa.readline().strip("\n").upper()
-			while(peak):
-				if "minus" in peak:
-					chimera = "A"
-				else:
-					chimera = "T"
-				overall_max = 0
-				i = 0	
-				while i < len(seq):
-					if seq[i] == chimera:
-						cur_max = 1
-						i = i+1
-						if i < len(seq):
-							while seq[i] == chimera:
-								cur_max = cur_max + 1
-								i = i + 1
-								if i == len(seq):
-									break
-						if cur_max > overall_max:
-							overall_max = cur_max
-					i = i+1
-				if overall_max > 12 or (seq.count(chimera) / len(seq)) >= 0.8:
-					chimera_list.append(peak)
-				else:
-					nonchimera_list.append(peak)
-				peak = fa.readline().strip("\n").strip(">")
-				seq = fa.readline().strip("\n").upper()
-
-		with open(input.peak_seq) as fa:
-			peak = fa.readline().strip("\n").strip(">")
-			seq = fa.readline().strip("\n").upper()
-			while(peak):
-				if "minus" in peak:
-					chimera = "A"
-				else:
-					chimera = "T"
-				if (seq.count(chimera)/ len(seq) > 0.5): 
-					misalignment_list.append(peak)
-				peak = fa.readline().strip("\n").strip(">")
-				seq = fa.readline().strip("\n").upper()
-				
-		with open(output.misalignment,'w') as mis:
-			mis.write("\n".join(misalignment_list))		
-		with open(output.chimera,'w') as chim:
-			chim.write("\n".join(chimera_list))
-		with open(output.nonchimera,'w') as nonchim:
-			nonchim.write("\n".join(nonchimera_list))
-
-rule chimera_hash:
-	input:
-		breakpoint_fa = "{sample}/{sample}_breakpoint.fa"
-	output:
-		chimera_hash = "{sample}/{sample}_chimera_hash.txt"
-	benchmark:
-		"benchmarks/run_chimera_hash/{sample}.tsv"
-	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_min_mem_mb,
-	group: "peaks"
-	run:
-		seqs = open(input.breakpoint_fa , 'r')
-		peak = seqs.readline().strip("\n").strip(">") 
-		seq = seqs.readline().strip("\n").upper()
-		hash = ['AA', 'AC', 'AG', 'AT', 'CA', 'CC', 'CG', 'CT', 'GA', 'GC', 'GG', 'GT', 'TA', 'TC', 'TG', 'TT' ]
-
-		with open(output.chimera_hash, 'w') as chim:
-			chim.write("peak\t" + "\t".join(hash) + "\twidth\n")
-			while(peak):
-				minus_peak = ("minus" in peak)
-				peak_hash = []
-				for key in hash:
-					# Get percent of total possible dimers for each unique dimer
-					peak_hash.append(str(seq.count(key) / (len(seq) - 2))) 
-				chim.write(peak + "\t" + "\t".join(peak_hash)  + "\t" + str(len(seq)) + "\n")
-				peak = seqs.readline().strip("\n").strip(">")
-				seq = seqs.readline().strip("\n").upper()
+	script:
+		"scripts/chimera.py"
 
 rule nearby_peak:
 	input:
@@ -760,63 +575,8 @@ rule create_big_table:
 		runtime = get_create_big_table_runtime,
 		mem_mb = get_create_big_table_mem_mb
 	group: "classify"
-	run:
-		Ntag = pd.read_table(input.Ntag_list , sep="\t", header=None, names=["read","Ntag"])
-		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
-		readIDs = readIDs.merge(Ntag, how="left", on="read")
-		del Ntag
-		polyA = pd.read_table(input.polyT_reads, sep="\t",header=None, names=["read"])
-		polyA["polyA"] = "pass_" + polyA['read']
-		readIDs = readIDs.merge(polyA, how="left", on="read").fillna('fail')
-		del polyA
-		gmotif = pd.read_table(input.pass_gmotif_list, sep="\t", header=None, names=["read"])
-		gmotif["gmotif"] = "pass_" + gmotif['read']
-		readIDs = readIDs.merge(gmotif, how="left", on="read").fillna('fail')
-		del gmotif
-		readIDs = readIDs.fillna('')
-		big_table = readIDs.groupby('peak_name').agg({'read': lambda x: len(list(set(x))),
-													  'Ntag': lambda x: ([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
-													  'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
-													  'gmotif': lambda x: len(list(set([y for y in x if y != "fail"])))}).reset_index()
-		del readIDs
-		peaks = pd.read_table(input.peaks, sep="\t", header=0)
-		big_table = peaks.merge(big_table, how="left", on="peak_name")
-		del peaks
-		chimera = pd.read_table(input.chimera, sep="\t", header=None, names=["peak_name"])
-		chimera['chimera'] = 'chimera'
-		nonchimera = pd.read_table(input.nonchimera, sep="\t", header=None, names=["peak_name"])
-		nonchimera['chimera'] = 'nonchimera'
-		chimeras = pd.concat([chimera, nonchimera])
-		misalignment = pd.read_table(input.misalignment, sep="\t", header=None, names=["peak_name"])
-		misalignment['misalignment'] = 'misalignment'
-		chimeras = chimeras.merge(misalignment, how="left", on=["peak_name"]).fillna("pass")
-		big_table = big_table.merge(chimeras, how="left", on="peak_name")
-		del chimera, chimeras, nonchimera, misalignment
-		intersect = pd.read_table(input.intersect_annotated, sep="\t", header=0)
-		big_table = big_table.merge(intersect[['peak_name','RepeatMasker','Evrony_KR','Homopolymers', 
-											   '1000_Genomes_Project','gnomAD','NyuWa','xTea', 
-											   'HGSVC3','HGSVC3-MELT-LRA','1019_ONT']], 
-											   how="left", on="peak_name")
-		del intersect  
-		usp = pd.read_table(input.unique_start_positions, sep="\t", header=0)
-		usp.columns = usp.columns.str.strip("#")
-		big_table = big_table.merge(usp, how="left", on="peak_name")
-		del usp
-		big_table["RPM"] = (big_table['num_peak_reads'] / (big_table['num_bam_reads'])) * 1000000
-		nearby_peak = pd.read_table(input.nearby_peaks, sep="\t", names=['nearest_peak','peak_name'])
-		nearby_peak['peak_name'] = nearby_peak['peak_name'].str.split(pat="=")
-		nearby_peak = nearby_peak.explode('peak_name')
-		big_table = big_table.merge(nearby_peak, how="left", on="peak_name")
-		del nearby_peak
-		segdups = pd.read_table(input.segdup_intersect, sep="\t", names=['chr','start','end','peak_name','SegDup'])
-		big_table = big_table.merge(segdups[['peak_name','SegDup']], how="left", on="peak_name")
-		del segdups
-		max_depth_distance = pd.read_table(input.max_depth,sep="\t", header=None, names=['peak_name','distance'] ) 
-		big_table = big_table.merge(max_depth_distance, how="left", on="peak_name")
-		del max_depth_distance 
-		big_table = big_table.replace(r',{2,}', '', regex=True)
-
-		big_table.to_csv(output.big_table, sep="\t", index=False, header=True, na_rep="")
+	script:
+		"scripts/create_big_table.py"
 
 rule filter_and_classify:
 	input:
@@ -971,35 +731,8 @@ rule transduction_big_table:
 		runtime = get_transduction_big_table_runtime,
 		mem_mb = get_transduction_big_table_mem_mb
 	group: "transduction"
-	run:
-		readIDs = pd.read_table(input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
-		soft3p = pd.read_table(input.softclip3p_trimmed_bed, sep="\t", header=None, names=["3p_soft_clip","start_s3p","end_s3p","read","mapq_s3p","strand_s3p"])
-		readIDs = readIDs.merge(soft3p[["read","3p_soft_clip"]], how="left", on="read")
-		del soft3p 
-		soft5p = pd.read_table(input.softclip5p_trimmed_bed, sep="\t", header=None, names=["5p_soft_clip","start_s5p","end_s5p","read","mapq_s5p","strand_s5p"])
-		readIDs = readIDs.merge(soft5p[["read","5p_soft_clip"]], how="left", on="read")
-		del soft5p 
-		hard5p = pd.read_table(input.hardclip5p_bed, sep="\t", header=None, names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","5p_hard_clip","peaks"])
-		readIDs = readIDs.merge(hard5p[["read","5p_hard_clip"]], how="left", on="read")
-		del hard5p 
-		hard3p = pd.read_table(input.hardclip3p_bed, sep="\t", header=None, names=["chr","start","end","read","null","strand","chr_ref","start_ref","end_ref","3p_hard_clip","peaks"])
-		readIDs = readIDs.merge(hard3p[["read","3p_hard_clip"]], how="left", on="read")
-		del hard3p 
-		readIDs = readIDs.fillna('')
-		big_table = readIDs.groupby('peak_name').agg({'read': lambda x: len(list(set(x))),
-													  '3p_soft_clip': lambda x: ','.join(list(set(x))),
-													  '5p_soft_clip': lambda x: ','.join(list(set(x))),
-													  '5p_hard_clip': lambda x: ','.join(list(set(x))),
-													  '3p_hard_clip': lambda x: ','.join(list(set(x)))}).reset_index()
-		del readIDs
-		custom_ref_peak = pd.read_table(input.transduction_bed, sep="\t", usecols=[3,4], names=["custom_ref_peak","peak_name"])
-		custom_ref_peak["peak_name"] = custom_ref_peak["peak_name"].str.split(",")
-		custom_ref_peak = custom_ref_peak.explode("peak_name")
-		big_table = big_table.merge(custom_ref_peak, how="left", on="peak_name")
-		del custom_ref_peak
-		big_table = big_table.replace(r',{2,}', '', regex=True)
-		big_table = big_table.replace(r'^,', '', regex=True)
-		big_table.to_csv(output.transduction_big_table, sep="\t", index=False, header=True, na_rep="")
+	script:
+		"scripts/transduction_big_table.py"
 
 rule call_transductions: 
 	input: 
