@@ -766,24 +766,16 @@ rule multi_sample_classification:
 		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
 		num_samples = lambda wildcards, input: len(input.sample_peaks),
-		replicate = lambda wildcards: "rep" in samples.columns
+		replicate = lambda wildcards: "rep" if "rep" in samples.columns else "sample"
 	resources:
 		runtime = get_min_runtime,
 		mem_mb = get_filter_and_classify_mem_mb,
 	group: "classify"
 	shell:
-		"if [[ {params.num_samples} -ge 3 ]]; then "
 			"python {workflow.basedir}/scripts/multi_classify.py "
 				"-d {wildcards.donor} "
 				"-f {input.sample_peaks} "
 				"-p {output.donor_peaks} "
 				"-m {output.multi_peaks} "
 				"-r {params.replicate} \n"
-		"else "
-			"touch {output.multi_peaks} \n"
-			"echo \"$(head -n 1 {input.sample_peaks[0]})\" > {output.donor_peaks} \n"
-			"cat {input.sample_peaks} | "
-				"grep -v 'chrm' " # remove headers
-				">> {output.donor_peaks} \n"
-		"fi"	
 		

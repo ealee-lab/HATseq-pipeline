@@ -1,4 +1,5 @@
 import argparse
+import shutil
 import pandas as pd
 import numpy as np
 import pybedtools
@@ -37,13 +38,13 @@ def get_peaks_for_multiintvls(peak_list, intvls, donor):
     peak_df = peak_df.sort_values(by="name")
     return peak_df
 
-def filter_multiintvls(peak_df):
+def filter_multiintvls(peak_df, n):
     """Determine which intervals likely represent putative insertions. 
     These intervals will be re-classified based on information from
     multiple samples."""
     
-    # Only re-classify putative insertions in >= 3 samples
-    multi_peaks = peak_df[peak_df["num"] >= 3]
+    # Only re-classify putative insertions in >= n samples
+    multi_peaks = peak_df[peak_df["num"] >= n]
     
     put_peaks = multi_peaks[(multi_peaks["classification"] == "UNK") | 
                             (multi_peaks["classification"].str.contains("SOM"))]["name"].unique()
@@ -63,7 +64,7 @@ def merge_multiintvls(multi_df, donor):
     """Merge adjacent intervals."""
     sort_df = multi_df.sort_values(by=["chrm","start"])
     merged_bt = BedTool.from_dataframe(sort_df).merge(
-        d=50, c=[5,6,7,9,10], 
+        d=200, c=[5,6,7,9,10], 
         o=["collapse","collapse","collapse","collapse","max"])
     
     merged_df = merged_bt.to_dataframe(disable_auto_names=True, header=None)
@@ -102,9 +103,22 @@ def reclassify_peaks_by_label(format_df):
     """Re-classify peaks detected across multiple replicates."""
     reclass_df = format_df.copy()
 
-    idxs = reclass_df["classes"].str.count("UNK") > reclass_df["classes"].str.count("SOM")
+    unk_counts = reclass_df["classes"].str.count("UNK")
+    som_counts = reclass_df["classes"].str.count("SOM")
+    private_counts = reclass_df["classes"].str.count("SOM_private")
+    clonal_counts = reclass_df["classes"].str.count("SOM_clonal")
+
+    # Classify as UNK if more reps are labeled UNK than SOM
+    idxs = unk_counts > som_counts
     reclass_df.loc[idxs, "classification"] = "UNK"
-    reclass_df.loc[~idxs, "classification"] = "SOM"
+
+    if private_counts.sum() == 0 & clonal_counts.sum() == 0:
+        reclass_df.loc[~idxs, "classification"] = "SOM"
+    else:
+        # Classify as clonal if at least one rep is labeled clonal
+        som_idxs = clonal_counts >= 1
+        reclass_df.loc[som_idxs, "classification"] = "SOM_clonal"
+        reclass_df.loc[~som_idxs, "classification"] = "SOM_private"
 
     # Peak is on different strands in different replicates
     reclass_df.loc[(reclass_df["strand"] == "+,-") |
@@ -134,26 +148,6 @@ def reclassify_peaks_by_signal(format_df, n):
     
     return reclass_df
 
-# def write_all_peaks(reclass_df, peak_list, peakfile):
-#     """Concatenate and write all peaks for the given donor to 
-#     one file."""
-#     all_df = pd.concat(peak_list)
-
-#     donor_df = reclass_df[["name","peaks","classification"]]
-    
-#     donor_df.loc[:, "peaks"] = donor_df["peaks"].str.split(",")
-#     donor_df = donor_df.explode("peaks").reset_index(drop=True)
-#     peak_map = dict(zip(donor_df["peaks"], donor_df["name"]))
-#     all_df.loc[:, "donor_peak"] = all_df["peak"].map(peak_map)
-
-#     donor_df = donor_df.drop("peaks", axis=1)
-#     donor_df.columns = ["donor_peak","donor_classification"]
-#     out_df = all_df.merge(donor_df, how="left", on="donor_peak")
-    
-#     out_df = out_df.drop_duplicates(keep="first")
-#     out_df = out_df.sort_values(by=["chrm","start"], key=natsort_key)
-#     out_df.to_csv(peakfile, sep="\t", index=False, header=True)
-
 def write_multi_peaks(reclass_df, multifile):
     """Write all re-classified multi-sample peaks for the given donor."""
     out_df = reclass_df[["chrm","start","end","name","RPM","strand","classification","peaks","num"]]
@@ -177,11 +171,70 @@ def write_reclassified_peaks(reclass_df, peak_list, peakfile, true_df=None):
     all_df = pd.concat(out_dfs)
 
     if isinstance(true_df, pd.DataFrame):
-        all_df = all_df.merge(benchmark_df, how="left", on="peak")
+        all_df = all_df.merge(true_df, how="left", on="peak")
 
+    all_df = all_df.drop_duplicates(keep='first')
     all_df.to_csv(peakfile, sep="\t", index=False, header=True)
 
-def main():
+def main(args):
+    donor = args.donor
+    filenames = args.filenames
+    peakfile = args.peakfile
+    multifile = args.multifile
+    replicate = True if args.replicate == "rep" else False
+    num_samples = len(filenames)
+    min_samples = 2 if replicate else 3
+
+    if num_samples < min_samples:
+        # Concatenate files without comparison if too few samples
+        dfs = []
+        for file in filenames:
+            file_df = pd.read_csv(file, sep="\t")
+            dfs.append(file_df)
+        df = pd.concat(dfs)
+        df.to_csv(peakfile, sep="\t", index=False, header=True)
+        
+        # Create empty file
+        with open(multifile, 'w') as f:
+            pass
+
+    else:
+        dfs = []
+        benchmark_dfs = []
+
+        # Read in sample peak files
+        for file in filenames:
+            file_df = pd.read_csv(file, sep="\t")
+            file_df = file_df[file_df["filter_reason"] != "nearby_peak"]
+            file_df = file_df.sort_values(by=["chrm","start"])
+        
+            benchmark = True if "true_insertion_ID" in file_df.columns else False
+            if benchmark:
+                benchmark_dfs.append(file_df[["peak","true_insertion_ID"]])
+                file_df = file_df.drop(columns="true_insertion_ID")
+
+            dfs.append(file_df)
+        
+        # Save true insertion info if benchmarking
+        if len(benchmark_dfs) != 0:
+            benchmark_df = pd.concat(benchmark_dfs)
+
+        bedtools = [BedTool.from_dataframe(df) for df in dfs]
+
+        intvls = get_multiintvls(bedtools)
+        peak_df = get_peaks_for_multiintvls(bedtools, intvls, donor)
+        multi_df = filter_multiintvls(peak_df, min_samples)
+        merge_df = merge_multiintvls(multi_df, donor)
+        format_df = format_multiintvls(merge_df)
+
+        if replicate:
+            reclass_df = reclassify_peaks_by_label(format_df)
+        else:
+            reclass_df = reclassify_peaks_by_signal(format_df, num_samples)
+
+        write_reclassified_peaks(reclass_df, dfs, peakfile, benchmark_df)
+        write_multi_peaks(reclass_df, multifile)
+
     return
 
 if __name__ == "__main__":
@@ -202,44 +255,7 @@ if __name__ == "__main__":
                         help="Path to output file with multi-sample peaks for donor",
                         required=True)
     parser.add_argument("-r", "--replicate", 
-                        help="True if comparing across replicates, else False",
+                        help="'rep' if comparing across replicates, else 'sample'",
                         required=True)
     args = parser.parse_args()
-
-    num_samples = len(args.filenames)
-
-    peak_dfs = []
-    benchmark_dfs = []
-
-    # Read in sample peak files
-    for file in args.filenames:
-        file_df = pd.read_csv(file, sep="\t")
-        file_df = file_df[file_df["filter_reason"] != "nearby_peak"]
-        file_df = file_df.sort_values(by=["chrm","start"])
-    
-        benchmark = True if "true_insertion_ID" in file_df.columns else False
-        if benchmark:
-            benchmark_dfs.append(file_df[["peak","true_insertion_ID"]])
-            file_df = file_df.drop(columns="true_insertion_ID")
-
-        peak_dfs.append(file_df)
-    
-    # Save true insertion info if benchmarking
-    if len(benchmark_dfs) != 0:
-        benchmark_df = pd.concat(benchmark_dfs)
-
-    peak_bts = [BedTool.from_dataframe(df) for df in peak_dfs]
-
-    intervals = get_multiintvls(peak_bts)
-    interval_peaks = get_peaks_for_multiintvls(peak_bts, intervals, args.donor)
-    filtered_intervals = filter_multiintvls(interval_peaks)
-    merged_intervals = merge_multiintvls(filtered_intervals, args.donor)
-    formatted_intervals = format_multiintvls(merged_intervals)
-    
-    if args.replicate == "True":
-        reclassed_peaks = reclassify_peaks_by_label(formatted_intervals)
-    else:
-        reclassed_peaks = reclassify_peaks_by_signal(formatted_intervals, num_samples)
-
-    write_reclassified_peaks(reclassed_peaks, peak_dfs, args.peakfile, benchmark_df)
-    write_multi_peaks(reclassed_peaks, args.multifile)
+    main(args)
