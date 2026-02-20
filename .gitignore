@@ -1,12 +1,12 @@
 /*
 *.err
 *.out
-*.txt
 *__pycache__
 !config
 !reference
+!resources
 !scripts
-!setup
+scripts/*/
 !workflow
 workflow/notebooks
 !README.md
