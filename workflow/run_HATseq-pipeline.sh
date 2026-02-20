@@ -42,4 +42,5 @@ snakemake -s Snakefile \
     --configfile ${config} \
     --directory ${outdir} \
     --profile ${profile} \
-    --use-conda --conda-frontend conda
+    --use-conda --conda-frontend conda \
+    --rerun-triggers mtime

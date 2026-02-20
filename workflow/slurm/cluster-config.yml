@@ -1,5 +1,5 @@
 __default__:
-    time: 360 # in min
+    time: 60 # in min
     threads: 1
     mem: 2000 # in MB
     output: /path/to/HATseq-pipeline/workflow/slurm/Hatseq_job_%j.out

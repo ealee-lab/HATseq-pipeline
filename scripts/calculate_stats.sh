@@ -2,7 +2,7 @@
 
 # Calculate precision, recall, and F1 score for each sample.
 
-peak_file=$1 # Path to classified_peaks.bed intersected with ground truth set (GTS)
+peak_file=$1 # Path to classified_peaks.bed
 true_peaks=$2 # Path to GTS
 out_file=$3 # Path to output file with statistics
 
@@ -12,7 +12,8 @@ fp=$(grep -E 'UNK|SOM' "${peak_file}" | \
 
 # Number of true peaks found (i.e. number of peaks that overlap with GTS)
 # (Don't re-count if 1 called peak overlaps >1 true peaks)
-tp=$(awk -v FS='\t' '{print $4}' "${true_peaks}" | grep -w -f - "${peak_file}" | \
+tp=$(awk -v FS='\t' '{print $4}' "${true_peaks}" | \
+    grep -w -f - "${peak_file}" | \
     grep -E 'UNK|SOM' | awk -v FS='\t' '{print $4}' | \
     sort | uniq | wc -l) 
 
@@ -23,6 +24,8 @@ fn=$((${num_true} - ${tp}))
 precision=$(echo "scale=4; ${tp} / (${tp} + ${fp})" | bc) 
 recall=$(echo "scale=4; ${tp} / (${tp} + ${fn})" | bc) 
 f1=$(echo "scale=4; 2 * (${precision} * ${recall}) / (${precision} + ${recall})" | bc)
+
+mkdir -p $(dirname ${out_file})
 
 echo -e "Number of true insertions: ${num_true}" > "${out_file}"
 echo "Number of UNK/SOM peaks called by HAT-seq: ${num_called}" >> "${out_file}"

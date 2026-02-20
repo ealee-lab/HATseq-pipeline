@@ -194,7 +194,27 @@ if (library != "bulk") {
       file=summary_file,
       sep="\n"
   )
+}
 
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$chimera == "chimera")] <- "chimera"
+big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
+cat(
+  paste0("\t\tChimera: ", 
+    nrow(big_table[big_table$filter_reason == "chimera",])), 
+  file=summary_file, 
+  sep="\n"
+)
+
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$misaligned == "misalignment")] <- "misaligned_reads"
+big_table$FP[big_table$filter_reason == "misaligned_reads"] <- TRUE
+cat(
+  paste0("\t\tMisaligned: ", 
+    nrow(big_table[big_table$filter_reason == "misaligned_reads",])), 
+  file=summary_file, 
+  sep="\n"
+)
+
+if (library != "bulk") {
   # Require multi-template support for PTA libraries
   if (library == "single") {
     big_table$filter_reason[(big_table$candidate) & 
@@ -223,24 +243,6 @@ if (library != "bulk") {
     sep="\n"
   )
 }
-
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$chimera == "chimera")] <- "chimera"
-big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
-cat(
-  paste0("\t\tChimera: ", 
-    nrow(big_table[big_table$filter_reason == "chimera",])), 
-  file=summary_file, 
-  sep="\n"
-)
-
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$misaligned == "misalignment")] <- "misaligned_reads"
-big_table$FP[big_table$filter_reason == "misaligned_reads"] <- TRUE
-cat(
-  paste0("\t\tMisaligned: ", 
-    nrow(big_table[big_table$filter_reason == "misaligned_reads",])), 
-  file=summary_file, 
-  sep="\n"
-)
 
 if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.2)] <- "polyApercent"
