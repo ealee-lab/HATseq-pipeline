@@ -1,3 +1,5 @@
+import os
+import re
 import argparse
 import shutil
 import pandas as pd
@@ -148,13 +150,15 @@ def reclassify_peaks_by_signal(format_df, n):
     
     return reclass_df
 
-def write_multi_peaks(reclass_df, multifile):
+def get_multi_peaks(reclass_df):
     """Write all re-classified multi-sample peaks for the given donor."""
+    # out_df = reclass_df.copy()
     out_df = reclass_df[["chrm","start","end","name","RPM","strand","classification","peaks","num"]]
     out_df = out_df.sort_values(by="name", key=natsort_key)
-    out_df.to_csv(multifile, sep="\t", index=False, header=True)
+    # out_df.to_csv(multifile, sep="\t", index=False, header=True)
+    return out_df
 
-def write_reclassified_peaks(reclass_df, peak_list, peakfile, true_df=None):
+def get_reclassified_peaks(reclass_df, peak_list, true_df):
     col_df = reclass_df[["classification","peaks"]]
     col_df["peaks"] = col_df["peaks"].str.split(",")
     col_df = col_df.explode("peaks").reset_index(drop=True)
@@ -168,72 +172,135 @@ def write_reclassified_peaks(reclass_df, peak_list, peakfile, true_df=None):
         out_df.drop(columns="donor_class", inplace=True)
         out_dfs.append(out_df)
 
-    all_df = pd.concat(out_dfs)
+    all_df = pd.concat(out_dfs).sort_values(by=["chrm","start"], key=natsort_key)
 
-    if isinstance(true_df, pd.DataFrame):
+    if len(true_df) > 0:
         all_df = all_df.merge(true_df, how="left", on="peak")
 
     all_df = all_df.drop_duplicates(keep='first')
-    all_df.to_csv(peakfile, sep="\t", index=False, header=True)
+    # all_df.to_csv(peakfile, sep="\t", index=False, header=True)
+    return all_df
 
-def main(args):
-    donor = args.donor
-    filenames = args.filenames
-    peakfile = args.peakfile
-    multifile = args.multifile
-    replicate = True if args.replicate == "rep" else False
-    num_samples = len(filenames)
-    min_samples = 2 if replicate else 3
+def get_cat_peaks(filenames):
+    file_dfs = []
+    for file in filenames:
+        file_df = pd.read_csv(file, sep="\t")
+        file_dfs.append(file_df)
+    df = pd.concat(file_dfs)
 
-    if num_samples < min_samples:
-        # Concatenate files without comparison if too few samples
-        dfs = []
-        for file in filenames:
-            file_df = pd.read_csv(file, sep="\t")
-            dfs.append(file_df)
-        df = pd.concat(dfs)
-        df.to_csv(peakfile, sep="\t", index=False, header=True)
+    return df, pd.DataFrame()
+
+def extract_true_peaks(file_dfs):
+    """Given a list of data frames, return a data frame containing all true 
+    peaks."""
+    benchmark_dfs = []
+
+    for file_df in file_dfs:
+        if "true_insertion_ID" in file_df.columns:
+            benchmark_dfs.append(file_df[["peak","true_insertion_ID"]])
+            file_df.drop(columns="true_insertion_ID", inplace=True)
         
-        # Create empty file
-        with open(multifile, 'w') as f:
-            pass
-
+    if len(benchmark_dfs) != 0:
+        benchmark_df = pd.concat(benchmark_dfs)
     else:
-        dfs = []
-        benchmark_dfs = []
+        benchmark_df = pd.DataFrame()
+    
+    return file_dfs, benchmark_df
 
-        # Read in sample peak files
-        for file in filenames:
-            file_df = pd.read_csv(file, sep="\t")
-            file_df = file_df[file_df["filter_reason"] != "nearby_peak"]
-            file_df = file_df.sort_values(by=["chrm","start"])
+def read_sample_peaks(filenames):
+    file_dfs = []
+
+    for file in filenames:
+        file_df = pd.read_csv(file, sep="\t")
+        file_df = file_df[file_df["filter_reason"] != "nearby_peak"]
+        file_df = file_df.sort_values(by=["chrm","start"])
+        file_dfs.append(file_df)
+    
+    peak_dfs, benchmark_df = extract_true_peaks(file_dfs)
+    return peak_dfs, benchmark_df
+
+def run_comparison(peaks, donor, comparison, num_samples, min_samples):
+    if num_samples < min_samples:
+        if isinstance(peaks[0], os.PathLike):
+            # Concatenate files without comparison if too few samples
+            peakfile_df, multifile_df = get_cat_peaks(peaks)
+        else:
+            raise ValueError("Must use file names")
+    else:
+        if isinstance(peaks[0], (str, os.PathLike)):
+            file_dfs, benchmark_df = read_sample_peaks(peaks)
+        elif isinstance(peaks[0], pd.DataFrame):
+            file_dfs, benchmark_df = extract_true_peaks(peaks)
+        else:
+            raise ValueError("Unsupported data type")
+
+        bedtools = [BedTool.from_dataframe(df) for df in file_dfs]
         
-            benchmark = True if "true_insertion_ID" in file_df.columns else False
-            if benchmark:
-                benchmark_dfs.append(file_df[["peak","true_insertion_ID"]])
-                file_df = file_df.drop(columns="true_insertion_ID")
-
-            dfs.append(file_df)
-        
-        # Save true insertion info if benchmarking
-        if len(benchmark_dfs) != 0:
-            benchmark_df = pd.concat(benchmark_dfs)
-
-        bedtools = [BedTool.from_dataframe(df) for df in dfs]
-
         intvls = get_multiintvls(bedtools)
         peak_df = get_peaks_for_multiintvls(bedtools, intvls, donor)
         multi_df = filter_multiintvls(peak_df, min_samples)
         merge_df = merge_multiintvls(multi_df, donor)
         format_df = format_multiintvls(merge_df)
 
-        if replicate:
+        if comparison == "rep":
             reclass_df = reclassify_peaks_by_label(format_df)
         else:
             reclass_df = reclassify_peaks_by_signal(format_df, num_samples)
 
-        write_reclassified_peaks(reclass_df, dfs, peakfile, benchmark_df)
-        write_multi_peaks(reclass_df, multifile)
+        peakfile_df = get_reclassified_peaks(reclass_df, file_dfs, benchmark_df)
+        multifile_df = get_multi_peaks(reclass_df)
+
+    return peakfile_df, multifile_df
+
+def main(args):
+    donor = args.donor
+    filenames = args.filenames
+    peakfile = args.peakfile
+    multifile = args.multifile
+    comparison = args.comparison
+
+    if comparison != "both":
+        num_samples = len(filenames)
+        min_samples = 2 if comparison == "rep" else 3
+
+        out_df1, out_df2 = run_comparison(filenames, donor, comparison, 
+                                          num_samples, min_samples)
+        out_df1.to_csv(peakfile, sep="\t", index=False, header=True)
+        out_df2.to_csv(multifile, sep="\t", index=False, header=True)
+
+    else:
+        tissue_files = {}
+
+        for file in filenames:
+            tissue = re.search(f'.*/{donor}-(.*)_[A-Z][0-9]+_.*', file).group(1)
+
+            if tissue not in tissue_files:
+                tissue_files[tissue] = [file]
+            else:
+                tissue_files[tissue].append(file)
+        
+        peakfiles = []
+        multifiles = []
+
+        for tissue in tissue_files:
+            num_reps = len(tissue_files[tissue])
+            tissue_df1, tissue_df2 = run_comparison(tissue_files[tissue], donor, "rep", 
+                                                    num_reps, 2)
+            peakfiles.append(tissue_df1)
+            multifiles.append(tissue_df2)
+
+        num_tissues = len(tissue_files)
+        if num_tissues < 3:
+            out_df1 = pd.concat(peakfiles)
+            out_df2 = pd.concat(multifiles)
+            
+            out_df1.to_csv(peakfile, sep="\t", index=False, header=True)
+            out_df2.to_csv(multifile, sep="\t", index=False, header=True)
+        else:
+            both_df1, both_df2 = run_comparison(peakfiles, donor, "tissue", 
+                                                num_tissues, 3)
+            both_df1.to_csv(peakfile, sep="\t", index=False, header=True)
+            both_df2.to_csv(multifile, sep="\t", index=False, header=True)
 
     return
 
@@ -254,8 +321,8 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--multifile", 
                         help="Path to output file with multi-sample peaks for donor",
                         required=True)
-    parser.add_argument("-r", "--replicate", 
-                        help="'rep' if comparing across replicates, else 'sample'",
+    parser.add_argument("-c", "--comparison", 
+                        help="How to compare samples (tissue, cell, rep, or both)",
                         required=True)
     args = parser.parse_args()
     main(args)
