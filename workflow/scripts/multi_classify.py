@@ -77,7 +77,21 @@ def merge_multiintvls(multi_df, donor):
 
     return merged_df
 
-def format_multiintvls(merged_df):
+def extract_num(peak, comparison):
+    if comparison == "rep":
+        # Extract replicate substring
+        samples = peak.str.extract(r'.*_([A-Z][0-9]+)-(?:plus|minus)-peak-[0-9]+')
+    else:
+        # Extract tissue substring
+        try:
+            # Peak has tissue AND replicate info
+            samples = peak.str.extract(r'(.*)_[A-Z][0-9]+-(?:plus|minus)-peak-[0-9]+')
+        except AttributeError:
+            # No match, peak only has tissue info
+            samples = peak.str.extract(r'(.*)-(?:plus|minus)-peak-[0-9]+')
+    return samples[0].nunique()
+
+def format_multiintvls(merged_df, comparison):
     """Re-format the merged intervals for subsequent steps."""
     format_df = merged_df.copy()
     
@@ -90,12 +104,13 @@ def format_multiintvls(merged_df):
     format_df = format_df.drop_duplicates(keep='first')
 
     format_df["RPM"] = format_df["RPM"].astype(float)
-    format_df = format_df.groupby(["chrm","start","end","name","num"]).agg(
+    format_df = format_df.groupby(["chrm","start","end","name"]).agg(
         RPM=('RPM', 'mean'),
         CoV=('RPM', 'std'),
         strand=('strand', lambda x: ",".join(set(x))),
         classes=('classes', lambda x: ",".join(x)),
-        peaks=('peaks', lambda x: ",".join(set(x)))
+        peaks=('peaks', lambda x: ",".join(set(x))),
+        num=('peaks', lambda x: extract_num(x, comparison))
     ).reset_index()
     format_df["CoV"] = format_df["CoV"] / format_df["RPM"]
 
@@ -239,8 +254,8 @@ def run_comparison(peaks, donor, comparison, num_samples, min_samples):
         intvls = get_multiintvls(bedtools)
         peak_df = get_peaks_for_multiintvls(bedtools, intvls, donor)
         multi_df = filter_multiintvls(peak_df, min_samples)
-        merge_df = merge_multiintvls(multi_df, donor)
-        format_df = format_multiintvls(merge_df)
+        merged_df = merge_multiintvls(multi_df, donor)
+        format_df = format_multiintvls(merged_df, comparison)
 
         if comparison == "rep":
             reclass_df = reclassify_peaks_by_label(format_df)
