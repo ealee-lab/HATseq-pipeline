@@ -35,7 +35,7 @@ This pipeline uses several annotations to remove reference and non-reference L1 
 ```
 
 ## Config Files ##
-See `config.library.yml` for an example config file. It is expected that you will have one config file for each library type (bulk, microbulk, single-cell), but you can split the pipeline into as many runs as you would like. Each config file links to a sample sheet with sample-specific information (`samples.library.tsv`) including donor, tissue/cell/rep, raw_fastq1, raw_fastq2, and index_seq. Currently, the pipeline does not support nested comparisons, so users can only compare across either tissues OR cells OR replicates.
+See `config.library.yml` for an example config file. It is expected that you will have one config file for each library type (bulk, microbulk, single-cell), but you can split the pipeline into as many runs as you would like. Each config file links to a sample sheet with sample-specific information (`samples.library.tsv`) including donor, tissue/cell/rep, raw_fastq1, raw_fastq2, and index_seq. Users can compare across either tissues, cells, replicates, or both tissues and replicates. Replicates must be identified by a capital letter followed by a number (e.g. R1) in the sample sheet.
 
 The error_prone and truth_set fields in the config file are optional. You can use the provided error-prone regions or generate your own with the `run_make_error-prone_regions.sh` script. The truth_set field is available in the case that you want to compare the pipeline output to a ground truth set of insertions. Truth sets are expected to be BED6 files of L1 insertions.
 

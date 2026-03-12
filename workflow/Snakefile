@@ -81,7 +81,7 @@ rule qc:
 		raw_fastq2 = lambda wildcards: samples.loc[wildcards.sample]["raw_fastq2"]
 	output:
 		illumina_adapter_trimmed_fastq1 = temp("{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz"),
-		illumina_adapter_trimmed_fastq2 = temp("{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz"),
+		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
 		fastp_html_report = "{sample}/reports/{sample}_fastp.html",
 		fastp_json_report = "{sample}/reports/{sample}_fastp.json"
 	benchmark:
@@ -112,15 +112,15 @@ rule preprocessing:
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
 	output:
 		L1HS_adapter_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq1.gz"),
-		L1HS_adapter_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"),
+		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz",
 		L1HS_primer_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq1.gz"),
-		L1HS_primer_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz",
+		L1HS_primer_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz"),
 		subfamily_specific_R2_list = "{sample}/{sample}_subfamily_specific_R2_list.txt",
 		L1HS_adapter_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR1_fastq1.gz"),
 		L1HS_primer_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR1_fastq1.gz"),
 		L1HS_untrimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_untrimmed_fromR1_fastq1.gz"),
 		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
-		mappable_R1_fastq1 = "{sample}/{sample}_mappable_R1_fastq1.gz",
+		mappable_R1_fastq1 = temp("{sample}/{sample}_mappable_R1_fastq1.gz"),
 		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
 		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
 		cutadapt_report = "{sample}/reports/{sample}_cutadapt_report.txt"
@@ -182,8 +182,8 @@ rule Ntag:
 		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
 		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt"
 	output:
-		Ntag_pre_fastq2 = "{sample}/{sample}_Ntag_pre_fastq2.gz",
-		Ntag_trimmed_fastq2 = "{sample}/{sample}_Ntag_trimmed_fastq2.gz",
+		Ntag_pre_fastq2 = temp("{sample}/{sample}_Ntag_pre_fastq2.gz"),
+		Ntag_trimmed_fastq2 = temp("{sample}/{sample}_Ntag_trimmed_fastq2.gz"),
 		Ntag_list = "{sample}/{sample}_Ntag_list.txt"
 	benchmark:
 		"benchmarks/Ntag/{sample}.tsv"
@@ -522,7 +522,7 @@ rule multi_sample_classification:
 		"benchmarks/multi_sample_classification/{donor}.tsv"
 	params:
 		num_samples = lambda wildcards, input: len(input.sample_peaks),
-		replicate = lambda wildcards: "rep" if "rep" in samples.columns else "sample"
+		comparison = get_comparison_string(samples)
 	resources:
 		runtime = get_min_runtime,
 		mem_mb = get_filter_and_classify_mem_mb,
@@ -533,5 +533,5 @@ rule multi_sample_classification:
 				"-f {input.sample_peaks} "
 				"-p {output.donor_peaks} "
 				"-m {output.multi_peaks} "
-				"-r {params.replicate} \n"
+			"-c {params.comparison}"
 		

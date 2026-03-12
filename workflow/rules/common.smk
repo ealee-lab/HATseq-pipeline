@@ -6,7 +6,9 @@ def set_sample_names(samples):
 
 	colnames = samples.columns
 
-	if "tissue" in colnames:
+	if "tissue" in colnames and "rep" in colnames:
+		samples.loc[:, "sample_name"] = samples["donor"] + "-" + samples["tissue"] + "_" + samples["rep"]
+	elif "tissue" in colnames:
 		samples.loc[:, "sample_name"] = samples["donor"] + "-" + samples["tissue"]
 	elif "cell" in colnames:
 		samples.loc[:, "sample_name"] = samples["donor"] + "-" + samples["cell"]
@@ -19,6 +21,21 @@ def set_sample_names(samples):
 def get_donor_samples(wildcards, samples):
 	names = samples[samples["donor"] == wildcards.donor]["sample_name"]
 	return names
+
+def get_comparison_string(samples):
+	colnames = samples.columns
+
+	if "tissue" in colnames and "rep" in colnames:
+		comp = "both"
+	elif "tissue" in colnames:
+		comp = "tissue"
+	elif "cell" in colnames:
+		comp = "cell"
+	elif "rep" in colnames:
+		comp = "rep"
+	else:
+		raise ValueError("Invalid method of comparison")
+	return comp
 
 #### Define memory limits for each rule ####
 def get_min_mem_mb(wildcards, attempt):
@@ -34,11 +51,11 @@ def get_preprocessing_mem_mb(wildcards, input, attempt):
 	return mb
 
 def get_alignment_mem_mb(wildcards, attempt):
-	mb = 12000 * (2 ** (attempt - 1))
+	mb = 12000 + (4000 * (attempt - 1))
 	return mb
 
 def get_Ntag_mem_mb(wildcards, input, attempt):
-	mb = max((2.5 * input.size_mb - 5000) * (2 ** (attempt - 1)), 2000)
+	mb = max((2.5 * input.size_mb - 4000) * (2 ** (attempt - 1)), 2000)
 	return mb
 
 def get_gmotif_mem_mb(wildcards, input, attempt):
