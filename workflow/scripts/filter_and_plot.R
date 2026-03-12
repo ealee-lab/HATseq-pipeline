@@ -30,7 +30,7 @@ canonical_chrs <- c(
 big_table <- read.table(big_table_file, sep="\t")
 colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
-  "reads","Ntag","polyA","gmotif","chimera","misaligned",
+  "reads","Ntag","polyA","gmotif","bp_chimera_len","bp_chimera_ratio","peak_chimera_ratio",
   "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
   "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads",
   "usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak",
@@ -125,10 +125,10 @@ big_table$FP <- FALSE
 
 # Filters are successive
 # An FP peak will be labeled by the first filter that catches it
-cat("\nFILTERS", file=summary_file, sep="\n")
-cat("\n\tAll peaks", file=summary_file, sep="\n")
-
 if (library != "bulk") {
+  cat("\nFILTERS", file=summary_file, sep="\n")
+  cat("\n\tAll peaks", file=summary_file, sep="\n")
+
   # In PTA libraries, remove smaller peaks nearby larger ones
   # that are due to incorrect amplification 
   big_table$filter_reason[!(big_table$FP) & (big_table$nearest_RPM_ratio < 1)] <- "nearby_peak"
@@ -196,7 +196,8 @@ if (library != "bulk") {
   )
 }
 
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$chimera == "chimera")] <- "chimera"
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & 
+                        ((big_table$bp_chimera_len > 12) | (big_table$bp_chimera_ratio >= 0.8))] <- "chimera"
 big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
 cat(
   paste0("\t\tChimera: ", 
@@ -205,27 +206,18 @@ cat(
   sep="\n"
 )
 
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$misaligned == "misalignment")] <- "misaligned_reads"
-big_table$FP[big_table$filter_reason == "misaligned_reads"] <- TRUE
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$peak_chimera_ratio > 0.5)] <- "A/T-rich"
+big_table$FP[big_table$filter_reason == "A/T-rich"] <- TRUE
 cat(
-  paste0("\t\tMisaligned: ", 
-    nrow(big_table[big_table$filter_reason == "misaligned_reads",])), 
+  paste0("\t\tA- or T-rich: ", 
+    nrow(big_table[big_table$filter_reason == "A/T-rich",])), 
   file=summary_file, 
   sep="\n"
 )
 
 if (library != "bulk") {
   # Require multi-template support for PTA libraries
-  if (library == "single") {
-    big_table$filter_reason[(big_table$candidate) & 
-                            !(big_table$FP) & 
-                            (big_table$TPM < 0.2)] <- "templates"
-  } else {
-    big_table$filter_reason[(big_table$candidate) &
-                            !(big_table$FP) & 
-                            (big_table$number_templates < 2)] <- "templates"
-  }
-
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
   big_table$FP[big_table$filter_reason == "templates"] <- TRUE
   cat(
     paste0("\t\tToo few templates: ", 
@@ -365,176 +357,19 @@ cat(
     sep="\n"
   )
 
-# TODO: Update plots
-#### Plotting (pre-filter) ####
-# filter_chrm <- ggplot(big_table, aes(x=(chrm %in% canonical_chrs), group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm()+
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Peaks in Canonical Chromosomes") + 
-#   ylab("Peak Count") + 
-#   xlab("Mapped to Canonical Chromosome")
-
-# filter_PTA_artifact  <- ggplot(big_table, aes(x=nearest_RPM_ratio, group=classification, color=classification, fill=classification)) +
-#   geom_histogram() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   geom_vline(xintercept = 0.2, color = "red", linetype = "dashed", size = 1) +
-#   annotate("text", x = .55, y = .5*nrow(big_table), label = "Threshold \n 0.2%", color = "red", angle = 0, vjust = -0.5) +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Ratio of Artifact Peak to Nearest Peak") + 
-#   ylab("Peak Count") + 
-#   xlab("Peak RPM / Largest Nearby Peak RPM")
-
-filter_polyA_spanning <- ggplot(
-  big_table, 
-  aes(x = classification, y=polyA_percent, 
-    fill=classification, color=classification)) +
-  geom_violin() +
-  geom_jitter(height=0, width=0.2) +
+#### Plotting ####
+filter_reasons <- ggplot(big_table[big_table$classification == "FP",], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
+  geom_bar() +
   scale_fill_nejm() +
   scale_color_nejm() +
-  #  geom_hline(yintercept = 0, color = "red", linetype = "dashed", size = 1) +
-  #  annotate("text", x=2.5,  y = 0.1, label = "Threshold \n 0%", color = "red", angle = 0, vjust = -0.5) +
-   #facet_wrap(~classification) +
-  ggtitle("Distribution of % of Reads Spanning the Insertion Junction per Peak") + 
-  ylab("% of Reads Spanning Insertion Junction") + 
-  xlab("Classification")
-
-filter_RPM <- ggplot(
-  big_table, 
-  aes(x=classification, y=RPM_log, 
-    fill=classification, color=classification)) +
-  geom_violin() +
-  geom_jitter(height=0, width=0.2) + 
-  scale_fill_nejm() +
-  scale_color_nejm() +
-#  facet_wrap(~classification, scales="free") +
-  ggtitle("Distribution of RPM per Peak") + 
-  ylab("log(RPM)") + 
-  xlab("Classification")
-
-filter_templates <- ggplot(
-  big_table, 
-  aes(x=classification, y=TPM, 
-    fill=classification, color=classification)) +
-  geom_violin() +
-  geom_jitter(height=0, width=0.2) + 
-  scale_fill_nejm() +
-  scale_color_nejm() +
-#  geom_vline(xintercept = 3, color = "red", linetype = "dashed", size = 1) +
-#  annotate("text", x = 70, y = .5*nrow(big_table), label = "Threshold \n 3", color = "red", angle = 0, vjust = -0.5) +
-#  facet_wrap(~classification) +
-  ggtitle("Distribution of Templates per Million per Peak") + 
-  ylab("Templates per Million") + 
-  xlab("Classification")
-
-# filter_gmotif <-ggplot(big_table, aes(x = classification, y=gmotif_percent, group=classification, color=classification, fill=classification)) +
-#   geom_violin() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   geom_hline(yintercept = 0.5, color = "red", linetype = "dashed", size = 1) +
-#   annotate("text", x=0.65,  y = 0.75, label = "Threshold \n 80%", color = "red", angle = 0, vjust = -0.5) +
-#   #facet_wrap(~classification) +
-#   ggtitle("Distribution of Gmotif Containing Read Support per Peak") + 
-#   ylab("Percent of Reads Containing Gmotif") + 
-#   xlab("Classification")
-
-# filter_template_ratio <-ggplot(big_table[!is.na(big_table$template_ratio),], aes(x = classification, y=template_ratio, group=classification, color=classification, fill=classification)) +
-#   geom_violin() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   geom_hline(yintercept = 0.25, color = "red", linetype = "dashed", size = 1) +
-#   annotate("text", x=2.5,  y = 0.25, label = "Threshold \n 25%", color = "red", angle = 0, vjust = -0.5) +
-#   #facet_wrap(~classification) +
-#   ggtitle("Distribution of Ratio of Two Highest Duplicate Depth Templates per Peak") + 
-#   ylab("Ratio of Two Highest Duplicate Depth Templates per Peak") + 
-#   xlab("Classification")
-
-# filter_chimera <- ggplot(big_table, aes(x=chimera, group=classification , color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm()+
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Chimeric Peaks") + 
-#   ylab("Peak Count") + 
-#   xlab("Chimera")
-
-# filter_misalignment <- ggplot(big_table, aes(x=misaligned, group=classification, color=classification, fill=classification)) + 
-#     geom_bar()+
-#     scale_fill_nejm()+
-#     scale_color_nejm()+
-#     facet_wrap(~classification) + 
-#     ggtitle("Distribution of Misaligned reads Peaks") + 
-#     ylab("Peak Count")+
-#     xlab("Misalignment")
-
-# filter_satellite <-ggplot(big_table, aes(x = (grepl("ALR/Alpha", repeatmasker)), group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Peaks in Satellite Regions") + 
-#   ylab("Peak Count") + 
-#   xlab("In Satellite Region")
-
-# filter_segdup <-ggplot(big_table, aes(x = (SegDups != '.'), group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Peaks in Segmental Duplications") + 
-#   ylab("Peak Count") + 
-#   xlab("In Segmental Duplication")
-
-
-#### Plotting (post-filter) ####
-# filter_reasons <- ggplot(big_table[big_table$classification == "FP",], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Filtering FP Peaks") + 
-#   ylab("Peak Count") + 
-#   xlab("Filter")+
-#   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
-
-# filter_reasons_KR <- ggplot(big_table[big_table$KR,], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification)  + 
-#   ggtitle("Distribution of Filtering KR Peaks") + 
-#   ylab("Peak Count") + 
-#   xlab("Filter")+
-#   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
-
-# filter_reasons_KNR <- ggplot(big_table[big_table$KNR,], aes(x=filter_reason, group=classification, color=classification, fill=classification)) +
-#   geom_bar() +
-#   scale_fill_nejm() +
-#   scale_color_nejm() +
-#   facet_wrap(~classification) +
-#   ggtitle("Distribution of Filtering KNR Peaks") + 
-#   ylab("Peak Count") + 
-#   xlab("Filter") +
-#   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+  facet_wrap(~classification) +
+  ggtitle("Number of FP Peaks per Filter") + 
+  ylab("Peak Count") + 
+  xlab("Filter")+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
 
 pdf(plots_path)
-filter_polyA_spanning
-filter_RPM
-filter_templates
-# filter_chrm
-# filter_PTA_artifact
-# filter_gmotif
-# filter_template_ratio
-# filter_chimera
-# filter_misalignment
-# filter_satellite
-# filter_segdup
-# filter_reasons
-# filter_reasons_KR
-# filter_reasons_KNR
+filter_reasons
 dev.off()
 
 # Candidate table

@@ -295,11 +295,8 @@ rule count_templates:
 rule chimera:
 	input:
 		breakpoint_fa = "{sample}/{sample}_breakpoint.fa",
-		peak_seq = "{sample}/{sample}_peak_sequence.fa"
 	output:
 		chimera = "{sample}/{sample}_chimera.txt",
-		nonchimera = "{sample}/{sample}_nonchimera.txt",
-		misalignment = "{sample}/{sample}_misalignment.txt"
 	benchmark:
 		"benchmarks/run_chimera/{sample}.tsv"
 	resources:
@@ -308,6 +305,20 @@ rule chimera:
 	group: "peaks"
 	script:
 		"scripts/chimera.py"
+
+rule A_T_content:
+	input:
+		peak_seq = "{sample}/{sample}_peak_sequence.fa"
+	output:
+		A_T_content = "{sample}/{sample}_A_T_content.txt"
+	benchmark:
+		"benchmarks/run_A_T_content/{sample}.tsv"
+	resources:
+		runtime = get_min_runtime,
+		mem_mb = get_min_mem_mb,
+	group: "peaks"
+	script:
+		"scripts/A_T_content.py"
 
 rule nearby_peak:
 	input:
@@ -379,7 +390,6 @@ rule create_big_table:
 		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt",
 		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed",
 		chimera = "{sample}/{sample}_chimera.txt",
-		nonchimera = "{sample}/{sample}_nonchimera.txt",
 		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt",
 		Ntag_list = "{sample}/{sample}_Ntag_list.txt",
 		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
@@ -387,7 +397,7 @@ rule create_big_table:
 		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
 		polyT_reads = "{sample}/{sample}_polyT_reads.txt",
-		misalignment = "{sample}/{sample}_misalignment.txt"
+		A_T_content = "{sample}/{sample}_A_T_content.txt"
 	output:
 		big_table = "{sample}/{sample}_big_table.tsv"
 	benchmark:
