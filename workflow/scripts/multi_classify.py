@@ -77,18 +77,18 @@ def merge_multiintvls(multi_df, donor):
 
     return merged_df
 
-def extract_num(peak, comparison):
+def extract_num(peaks, comparison):
     if comparison == "rep":
         # Extract replicate substring
-        samples = peak.str.extract(r'.*_([A-Z][0-9]+)-(?:plus|minus)-peak-[0-9]+')
+        samples = peaks.str.extract(r'.*_([A-Z][0-9]+)-(?:plus|minus)-peak-[0-9]+')
     else:
         # Extract tissue substring
-        try:
-            # Peak has tissue AND replicate info
-            samples = peak.str.extract(r'(.*)_[A-Z][0-9]+-(?:plus|minus)-peak-[0-9]+')
-        except AttributeError:
-            # No match, peak only has tissue info
-            samples = peak.str.extract(r'(.*)-(?:plus|minus)-peak-[0-9]+')
+        # Case 1: Peak has tissue AND replicate info
+        # Case 2: No match, peak only has tissue info
+        samples = peaks.str.extract(r'(.*)_[A-Z][0-9]+-(?:plus|minus)-peak-[0-9]+').fillna(
+            peaks.str.extract(r'(.*)-(?:plus|minus)-peak-[0-9]+')
+        )
+
     return samples[0].nunique()
 
 def format_multiintvls(merged_df, comparison):
