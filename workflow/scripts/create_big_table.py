@@ -31,16 +31,8 @@ del peaks
 
 chimera = pd.read_table(snakemake.input.chimera, sep="\t", 
 						header=None, names=["peak_name","bp_chimera_len","bp_chimera_ratio"])
-# chimera['chimera'] = 'chimera'
-# nonchimera = pd.read_table(snakemake.input.nonchimera, sep="\t", header=None, names=["peak_name"])
-# nonchimera['chimera'] = 'nonchimera'
-# chimeras = pd.concat([chimera, nonchimera])
-base_content = pd.read_table(snakemake.input.A_T_content, sep="\t", 
-							 header=None, names=["peak_name","peak_chimera_ratio"])
-# misalignment['misalignment'] = 'misalignment'
-chimera = chimera.merge(base_content, how="left", on=["peak_name"]).fillna("pass")
 big_table = big_table.merge(chimera, how="left", on="peak_name")
-del chimera, base_content
+del chimera
 
 intersect = pd.read_table(snakemake.input.intersect_annotated, sep="\t", header=0)
 big_table = big_table.merge(

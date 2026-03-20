@@ -306,20 +306,6 @@ rule chimera:
 	script:
 		"scripts/chimera.py"
 
-rule A_T_content:
-	input:
-		peak_seq = "{sample}/{sample}_peak_sequence.fa"
-	output:
-		A_T_content = "{sample}/{sample}_A_T_content.txt"
-	benchmark:
-		"benchmarks/run_A_T_content/{sample}.tsv"
-	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_min_mem_mb,
-	group: "peaks"
-	script:
-		"scripts/A_T_content.py"
-
 rule nearby_peak:
 	input:
 		peaks = "{sample}/{sample}_peaks.bed"
@@ -396,8 +382,7 @@ rule create_big_table:
 		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
 		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		polyT_reads = "{sample}/{sample}_polyT_reads.txt",
-		A_T_content = "{sample}/{sample}_A_T_content.txt"
+		polyT_reads = "{sample}/{sample}_polyT_reads.txt"
 	output:
 		big_table = "{sample}/{sample}_big_table.tsv"
 	benchmark:

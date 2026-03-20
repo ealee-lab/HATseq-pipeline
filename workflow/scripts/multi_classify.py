@@ -50,15 +50,15 @@ def filter_multiintvls(peak_df, n):
     
     put_peaks = multi_peaks[(multi_peaks["classification"] == "UNK") | 
                             (multi_peaks["classification"].str.contains("SOM"))]["name"].unique()
-    known_peaks = multi_peaks[multi_peaks["classification"].isin(["KR","KNR","Off-target"])]["name"].unique()
-    filter_peaks = multi_peaks[~(multi_peaks["filter"].isin(["-NA-","RPM","polyApercent","templates"]))]["name"].unique()
+    # known_peaks = multi_peaks[multi_peaks["classification"].isin(["KR","KNR","Off-target"])]["name"].unique()
+    # filter_peaks = multi_peaks[~(multi_peaks["filter"].isin(["-NA-","RPM","polyApercent","templates"]))]["name"].unique()
 
     # Interval must be UNK/SOM in >= 1 sample... 
     # AND not KR/KNR/Off-target in any sample...
     # AND not labeled as artifact in any sample
     multi_df = multi_peaks[multi_peaks["name"].isin(put_peaks)]
-    multi_df = multi_df[~multi_df["name"].isin(known_peaks)]
-    multi_df = multi_df[~multi_df["name"].isin(filter_peaks)]
+    # multi_df = multi_df[~multi_df["name"].isin(known_peaks)]
+    # multi_df = multi_df[~multi_df["name"].isin(filter_peaks)]
 
     return multi_df
 
@@ -227,7 +227,13 @@ def read_sample_peaks(filenames):
 
     for file in filenames:
         file_df = pd.read_csv(file, sep="\t")
-        file_df = file_df[file_df["filter_reason"] != "nearby_peak"]
+
+        # Remove known peaks
+        file_df = file_df[~file_df["classification"].str.contains(r'KR|KNR|Off-target')]
+
+        # Remove artifacts and peaks in error-prone regions
+        file_df = file_df[~file_df["filter_reason"].str.contains(r'nearby|chimera|error')]
+
         file_df = file_df.sort_values(by=["chrm","start"])
         file_dfs.append(file_df)
     

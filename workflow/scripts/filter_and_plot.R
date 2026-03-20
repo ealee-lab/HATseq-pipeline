@@ -30,7 +30,7 @@ canonical_chrs <- c(
 big_table <- read.table(big_table_file, sep="\t")
 colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
-  "reads","Ntag","polyA","gmotif","bp_chimera_len","bp_chimera_ratio","peak_chimera_ratio",
+  "reads","Ntag","polyA","gmotif","bp_chimera_len","bp_chimera_ratio",
   "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
   "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads",
   "usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak",
@@ -96,14 +96,12 @@ cat(paste0("Total peaks: ", nrow(big_table)), file=summary_file, sep="\n")
 
 # Annotate peaks overlapping centromere or SegDup and peaks without Gmotif
 cat("\nANNOTATIONS", file=summary_file, sep="\n")
-if (library == "bulk") {
-  cat(
-    paste0("Total peaks overlapping ALR/Alpha satellites (centromeres): ", 
-      nrow(big_table[grepl("ALR/Alpha", big_table$repeatmasker),])), 
-    file=summary_file, 
-    sep="\n"
-  )
-}
+cat(
+  paste0("Total peaks overlapping ALR/Alpha satellites (centromeres): ", 
+    nrow(big_table[grepl("ALR/Alpha", big_table$repeatmasker),])), 
+  file=summary_file, 
+  sep="\n"
+)
 cat(
   paste0("Total peaks overlapping SegDups: ", 
     nrow(big_table[big_table$SegDups != '.',])), 
@@ -185,32 +183,12 @@ big_table$filter_reason[big_table$classification == "Off-target"] <- "Off-target
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 cat("\n\tCandidate peaks", file=summary_file, sep="\n")
 
-if (library != "bulk") {
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & grepl("ALR/Alpha",big_table$repeatmasker)] <- "ALR/Alpha"
-  big_table$FP[big_table$filter_reason == "ALR/Alpha"] <- TRUE
-  cat(
-    paste0("\t\tALR/Alpha Satellite overlapping: ", 
-      nrow(big_table[big_table$filter_reason == "ALR/Alpha",] )),
-      file=summary_file,
-      sep="\n"
-  )
-}
-
 big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & 
                         ((big_table$bp_chimera_len > 12) | (big_table$bp_chimera_ratio >= 0.8))] <- "chimera"
 big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
 cat(
   paste0("\t\tChimera: ", 
     nrow(big_table[big_table$filter_reason == "chimera",])), 
-  file=summary_file, 
-  sep="\n"
-)
-
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$peak_chimera_ratio > 0.5)] <- "A/T-rich"
-big_table$FP[big_table$filter_reason == "A/T-rich"] <- TRUE
-cat(
-  paste0("\t\tA- or T-rich: ", 
-    nrow(big_table[big_table$filter_reason == "A/T-rich",])), 
   file=summary_file, 
   sep="\n"
 )
@@ -238,13 +216,10 @@ if (library != "bulk") {
 
 if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.2)] <- "polyApercent"
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"
 } else if (library == "micro") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.1)] <- "polyApercent"
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <-"RPM"
 } else {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <- "RPM"
 }
 
 big_table$FP[big_table$filter_reason == "polyApercent"] <- TRUE
@@ -254,6 +229,12 @@ cat(
   file=summary_file, 
   sep="\n"
 )
+
+if (library == "single") {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"
+} else {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 1)] <-"RPM"
+}
 
 big_table$FP[big_table$filter_reason == "RPM"] <- TRUE
 cat(
