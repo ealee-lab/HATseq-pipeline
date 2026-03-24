@@ -15,24 +15,24 @@ for read in ibam.fetch(until_eof=True):
 	reverse = (read.flag & 16 == 16) 
 
 	if "S" in read.cigarstring:
-		if read.cigartuples[0][0] == 4 :
-			if reverse: # reverse read and clip is at reference 3' = 5' clipping
+		if read.cigartuples[0][0] == 4:
+			if reverse:
 				ofasta3p.write(">" + read.query_name + "\n")
 				ofasta3p.write(
-					reverse_complement(read.query_sequence[0:read.query_alignment_start-1]) + "\n")
+					reverse_complement(read.query_sequence[0:read.query_alignment_start]) + "\n")
 			else:
 				ofasta5p.write(">" + read.query_name + "\n")
 				ofasta5p.write(
-					read.query_sequence[0:read.query_alignment_start-1] + "\n")
+					read.query_sequence[0:read.query_alignment_start] + "\n")
 		elif read.cigartuples[len(read.cigartuples)-1][0] == 4:
 			if reverse:
 				ofasta5p.write(">" + read.query_name + "\n")
 				ofasta5p.write(
-					reverse_complement(read.query_sequence[read.query_alignment_end+1:read.query_length-1]) + "\n")
+					reverse_complement(read.query_sequence[read.query_alignment_end:read.query_length]) + "\n")
 			else:
 				ofasta3p.write(">" + read.query_name + "\n")
 				ofasta3p.write(
-					read.query_sequence[read.query_alignment_end+1:read.query_length-1] + "\n")
+					read.query_sequence[read.query_alignment_end:read.query_length] + "\n")
 
 	if "H" in read.cigarstring:
 		if read.cigartuples[0][0] == 5:
