@@ -212,12 +212,14 @@ rule gmotif:
 	
 rule extract_clipping:
 	input:	
-		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam"
+		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
+		peaks = "{sample}/{sample}_peaks.bed",
 	output:
 		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz",
+		softclip3p_table = "{sample}/{sample}_softclip_3p.tsv",
 		softclip5p_fasta = "{sample}/{sample}_softclip_5p.fa.gz",
 		hardclip3p_table = "{sample}/{sample}_hardclip_3p.tsv",
-		hardclip5p_table = "{sample}/{sample}_hardclip_5p.tsv"
+		hardclip5p_table = "{sample}/{sample}_hardclip_5p.tsv",
 	benchmark:
 		"benchmarks/run_extract_clipping/{sample}.tsv"
 	resources:
@@ -228,19 +230,20 @@ rule extract_clipping:
 
 rule junction_spanning:
 	input:
-		softclip3p_fasta = "{sample}/{sample}_softclip_3p.fa.gz"
+		softclip3p_table = "{sample}/{sample}_softclip_3p.tsv"
 	output:
 		polyT_reads = "{sample}/{sample}_polyT_reads.txt"
 	benchmark:
 		"benchmarks/junction_spanning/{sample}.tsv"
 	params:
-		adapter_T = "TTTTTTTT" 
+		adapter_T = "TTTTTTTT",
 	resources:
 		runtime = get_min_runtime,
 		mem_mb = get_min_mem_mb
 	shell:
-		"zcat {input.softclip3p_fasta} | "
-			"awk -v RS='>' -F '\n' 'substr($2,1,30) ~ \"{params.adapter_T}\" {{print $1}}' "
+		"cat {input.softclip3p_table} | "
+			"awk -v OFS='\t' "
+			"'{{if(substr($5,1,30) ~ \"{params.adapter_T}\") print $1,$2,$3,$4,substr($5,1,30)}}' "
 			"> {output.polyT_reads}"
 
 rule peak_calling:
@@ -370,7 +373,8 @@ rule create_big_table:
 		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
 		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		polyT_reads = "{sample}/{sample}_polyT_reads.txt"
+		polyT_reads = "{sample}/{sample}_polyT_reads.txt",
+		softclip3p_table = "{sample}/{sample}_softclip_3p.tsv"
 	output:
 		big_table = "{sample}/{sample}_big_table.tsv"
 	benchmark:

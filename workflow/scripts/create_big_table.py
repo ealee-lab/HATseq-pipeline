@@ -1,32 +1,70 @@
 import pandas as pd
+import statistics
+# import pybedtools
+# from pybedtools import BedTool
+
+peaks = pd.read_table(
+	snakemake.input.peaks, sep="\t", skiprows=1, header=None, 
+	names=["chr","start","end","peak_name","shape","strand"])
+
+readIDs = pd.read_table(
+	snakemake.input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
+peaks = peaks.merge(readIDs, how="left", on="peak_name")
+del readIDs
 
 Ntag = pd.read_table(snakemake.input.Ntag_list, sep="\t", 
 					 header=None, names=["read","Ntag"])
-readIDs = pd.read_table(snakemake.input.peak_readID_list, sep="\t", 
-						header=None, names=["peak_name","read"])
-readIDs = readIDs.merge(Ntag, how="left", on="read")
+peaks = peaks.merge(Ntag, how="left", on="read").fillna("")
 del Ntag
 
-polyA = pd.read_table(snakemake.input.polyT_reads, sep="\t",header=None, names=["read"])
-polyA["polyA"] = "pass_" + polyA['read']
-readIDs = readIDs.merge(polyA, how="left", on="read").fillna('fail')
-del polyA
-
 gmotif = pd.read_table(snakemake.input.pass_gmotif_list, sep="\t", header=None, names=["read"])
-gmotif["gmotif"] = "pass_" + gmotif['read']
-readIDs = readIDs.merge(gmotif, how="left", on="read").fillna('fail')
+gmotif["gmotif"] = "pass_" + gmotif["read"]
+peaks = peaks.merge(gmotif, how="left", on="read").fillna("fail")
 del gmotif
 
-readIDs = readIDs.fillna('')
-big_table = readIDs.groupby('peak_name').agg({
-	'read': lambda x: len(list(set(x))),
-	'Ntag': lambda x: ([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
-	'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
-	'gmotif': lambda x: len(list(set([y for y in x if y != "fail"])))}).reset_index()
-del readIDs
+clippoints = pd.read_table(
+	snakemake.input.softclip3p_table, sep="\t", header=None, 
+	usecols=[0,1,2,3], names=["read","chr","clippoint","strand"])
+peaks = peaks.merge(clippoints, how="left", on=["read","chr","strand"]).fillna(-1)
+# peaks = peaks.astype({"clippoint": "int"})
+del clippoints
 
-peaks = pd.read_table(snakemake.input.peaks, sep="\t", header=0)
-big_table = peaks.merge(big_table, how="left", on="peak_name")
+# Remove rows where clipped read is incorrectly matched to peak
+peaks = peaks[(peaks["clippoint"] == -1) | 
+			  ((peaks["clippoint"] >= peaks["start"]) & (peaks["clippoint"] <= peaks["end"]))]
+
+polyA = pd.read_table(
+	snakemake.input.polyT_reads, sep="\t", header=None, 
+	usecols=[0,1,2,3], names=["read","chr","clippoint","strand"])
+polyA["polyA"] = "pass_" + polyA['read']
+peaks = peaks.merge(polyA, how="left", on=["read","chr","clippoint","strand"]).fillna("fail")
+del polyA
+
+breakpoints = peaks[peaks["polyA"] != "fail"].groupby("peak_name").agg(
+	breakpoint=('clippoint', lambda x: statistics.mode(x))
+).reset_index()
+peaks = peaks.merge(breakpoints, how="left", on="peak_name").fillna(-1)
+
+peaks["bp_dist"] = -1
+peaks.loc[peaks["clippoint"] > -1, "bp_dist"] = abs(peaks["clippoint"] - peaks["breakpoint"])
+
+def calculate_breakpoint_concordance(x):
+	bps = [int(y) for y in x if y > -1]
+
+	if len(bps) > 0:
+		bp_near = [d for d in bps if d < 10]
+		bp_pct = len(bp_near) / len(bps)
+	else:
+		bp_pct = -1
+	return bp_pct
+
+big_table = peaks.groupby(["chr","start","end","peak_name","shape","strand"]).agg({
+	'read': lambda x: len(list(set(x))),
+	'Ntag': lambda x: ",".join([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
+	'gmotif': lambda x: len(list(set([y for y in x if y != "fail"]))),
+	'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
+	'bp_dist': lambda x: calculate_breakpoint_concordance(x)
+}).reset_index()
 del peaks
 
 chimera = pd.read_table(snakemake.input.chimera, sep="\t", 
@@ -40,7 +78,7 @@ big_table = big_table.merge(
 			   '1000_Genomes_Project','gnomAD','NyuWa','xTea',
 			   'HGSVC3','HGSVC3-MELT-LRA','1019_ONT']], 
 	how="left", on="peak_name")
-del intersect  
+del intersect
 
 usp = pd.read_table(snakemake.input.unique_start_positions, sep="\t", header=0)
 usp.columns = usp.columns.str.strip("#")

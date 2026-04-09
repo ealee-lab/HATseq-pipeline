@@ -1,5 +1,6 @@
 import gzip
 import pysam
+import pandas as pd
 
 ofasta5p=gzip.open(snakemake.output.softclip5p_fasta, 'wt')
 otable5p=open(snakemake.output.hardclip5p_table, 'w')
@@ -10,29 +11,54 @@ def reverse_complement(seq):
 	complement = {'A':'T', 'T':'A', 'G':'C', 'C':'G', 'N':'N'}
 	return ''.join(complement[base] for base in reversed(seq))
 
+names = []
+chrs = []
+breakpoints = []
+strands = []
+seqs = []
+
 ibam=pysam.AlignmentFile(snakemake.input.peak_sorted_bam, 'rb')
 for read in ibam.fetch(until_eof=True):
-	reverse = (read.flag & 16 == 16) 
+	reverse = (read.flag & 16 == 16)
 
 	if "S" in read.cigarstring:
-		if read.cigartuples[0][0] == 4:
+		if read.cigartuples[0][0] == 4: # alignment starts with soft clip
 			if reverse:
-				ofasta3p.write(">" + read.query_name + "\n")
-				ofasta3p.write(
-					reverse_complement(read.query_sequence[0:read.query_alignment_start]) + "\n")
+				read_seq = reverse_complement(
+					read.query_sequence[0:read.query_alignment_start])
+				ofasta3p.write(">" + read.query_name + "\n" + read_seq + "\n")
+				# ofasta3p.write(
+				# 	reverse_complement(read.query_sequence[0:read.query_alignment_start]) + "\n")
+				
+				names.append(read.query_name)
+				chrs.append(read.reference_name)
+				breakpoints.append(read.reference_start)
+				strands.append("-")
+				seqs.append(read_seq)
 			else:
-				ofasta5p.write(">" + read.query_name + "\n")
-				ofasta5p.write(
-					read.query_sequence[0:read.query_alignment_start] + "\n")
-		elif read.cigartuples[len(read.cigartuples)-1][0] == 4:
+				read_seq = read.query_sequence[0:read.query_alignment_start]
+				ofasta5p.write(">" + read.query_name + "\n" + read_seq + "\n")
+				# ofasta5p.write(
+				# 	read.query_sequence[0:read.query_alignment_start] + "\n")
+				
+		elif read.cigartuples[len(read.cigartuples)-1][0] == 4: # alignment ends with soft clip
 			if reverse:
-				ofasta5p.write(">" + read.query_name + "\n")
-				ofasta5p.write(
-					reverse_complement(read.query_sequence[read.query_alignment_end:read.query_length]) + "\n")
+				read_seq = reverse_complement(
+					read.query_sequence[read.query_alignment_end:read.query_length])
+				ofasta5p.write(">" + read.query_name + "\n" + read_seq + "\n")
+				# ofasta5p.write(
+				# 	reverse_complement(read.query_sequence[read.query_alignment_end:read.query_length]) + "\n")
 			else:
-				ofasta3p.write(">" + read.query_name + "\n")
-				ofasta3p.write(
-					read.query_sequence[read.query_alignment_end:read.query_length] + "\n")
+				read_seq = read.query_sequence[read.query_alignment_end:read.query_length]
+				ofasta3p.write(">" + read.query_name + "\n" + read_seq + "\n")
+				# ofasta3p.write(
+				# 	read.query_sequence[read.query_alignment_end:read.query_length] + "\n")
+				
+				names.append(read.query_name)
+				chrs.append(read.reference_name)
+				breakpoints.append(read.reference_end)
+				strands.append("+")
+				seqs.append(read_seq)
 
 	if "H" in read.cigarstring:
 		if read.cigartuples[0][0] == 5:
@@ -73,3 +99,10 @@ ofasta5p.close()
 otable5p.close()
 ofasta3p.close()
 otable3p.close()
+
+df_3p = pd.DataFrame({'read': names, 
+					  'chr': chrs, 
+					  'breakpoint': breakpoints, 
+					  'strand': strands,
+					  "sequence": seqs}).sort_values(by=["chr","breakpoint"])
+df_3p.to_csv(snakemake.output.softclip3p_table, sep="\t", index=False, header=False)

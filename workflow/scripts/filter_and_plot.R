@@ -1,5 +1,5 @@
 library(bedtoolsr)
-library(UpSetR) 
+library(UpSetR)
 library(stringr) 
 library(reshape) 
 library(ggplot2) 
@@ -27,10 +27,10 @@ canonical_chrs <- c(
   "chr19","chr20","chr21","chr22","chrX","chrY"
 )
 
-big_table <- read.table(big_table_file, sep="\t")
+big_table <- read.table(big_table_file, sep="\t", header=TRUE)
 colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
-  "reads","Ntag","polyA","gmotif","bp_chimera_len","bp_chimera_ratio",
+  "reads","Ntag","gmotif","polyA","breakpoint","bp_chimera_len","bp_chimera_ratio",
   "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
   "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads",
   "usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak",
@@ -183,15 +183,15 @@ big_table$filter_reason[big_table$classification == "Off-target"] <- "Off-target
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 cat("\n\tCandidate peaks", file=summary_file, sep="\n")
 
-big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & 
-                        ((big_table$bp_chimera_len > 12) | (big_table$bp_chimera_ratio >= 0.8))] <- "chimera"
-big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
-cat(
-  paste0("\t\tChimera: ", 
-    nrow(big_table[big_table$filter_reason == "chimera",])), 
-  file=summary_file, 
-  sep="\n"
-)
+# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & 
+#                         ((big_table$bp_chimera_len > 12) | (big_table$bp_chimera_ratio >= 0.8))] <- "chimera"
+# big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
+# cat(
+#   paste0("\t\tChimera: ", 
+#     nrow(big_table[big_table$filter_reason == "chimera",])), 
+#   file=summary_file, 
+#   sep="\n"
+# )
 
 if (library != "bulk") {
   # Require multi-template support for PTA libraries
@@ -229,6 +229,15 @@ cat(
   file=summary_file, 
   sep="\n"
 )
+
+# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$breakpoint < 0.8)] <- "breakpoint"
+# big_table$FP[big_table$filter_reason == "breakpoint"] <- TRUE
+# cat(
+#   paste0("\t\tInconsistent breakpoints: ", 
+#     nrow(big_table[big_table$filter_reason == "breakpoint",])), 
+#   file=summary_file, 
+#   sep="\n"
+# )
 
 if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"
