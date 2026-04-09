@@ -18,6 +18,9 @@ def set_sample_names(samples):
 		samples.loc[:, "sample_name"] = samples["donor"]
 	return
 
+def get_index_seq(wildcards, samples):
+	return samples.loc[wildcards.sample]["index_seq"]
+
 def get_donor_samples(wildcards, samples):
 	names = samples[samples["donor"] == wildcards.donor]["sample_name"]
 	return names
@@ -178,3 +181,8 @@ def get_map_transduction_fasta_runtime(wildcards, input, attempt):
 def get_transduction_big_table_runtime(wildcards, input, attempt):
 	minutes = 4 * (2 ** (attempt - 1))
 	return minutes
+
+#### Miscellaneous ####
+def reverse_complement(seq):
+	complement = {'A':'T', 'T':'A', 'G':'C', 'C':'G', 'N':'N'}
+	return ''.join(complement[base] for base in reversed(seq))

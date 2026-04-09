@@ -58,7 +58,7 @@ localrules: HATseq
 rule HATseq:
 	input:
 		expand([
-		"{sample}/{sample}_mappable_R1_list.txt",
+		# "{sample}/{sample}_mappable_R1_list.txt",
 		"{sample}/{sample}_peak_sorted_bwa.bam",
 		"{sample}/{sample}_Ntag_list.txt",
 		"{sample}/{sample}_pass_gmotif_list.txt",
@@ -80,8 +80,8 @@ rule qc:
 		raw_fastq1 = lambda wildcards: samples.loc[wildcards.sample]["raw_fastq1"],
 		raw_fastq2 = lambda wildcards: samples.loc[wildcards.sample]["raw_fastq2"]
 	output:
-		illumina_adapter_trimmed_fastq1 = temp("{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz"),
-		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
+		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_R1.fq.gz",
+		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_R2.fq.gz",
 		fastp_html_report = "{sample}/reports/{sample}_fastp.html",
 		fastp_json_report = "{sample}/reports/{sample}_fastp.json"
 	benchmark:
@@ -95,50 +95,38 @@ rule qc:
 		runtime = get_qc_runtime,
 		mem_mb = get_qc_mem_mb
 	shell:
-		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.length_req} "
+		"mkdir -p {params.report_path} \n"
+		"fastqc -t {params.cores} --noextract --nogroup "
+			"-o {params.report_path} "
+			"{input.raw_fastq1} {input.raw_fastq2} \n" # Run fastqc
+
+		"fastp -w {params.cores} -a {params.illumina_adapter} --length_required={params.length_req} "
 			"-i {input.raw_fastq1} -I {input.raw_fastq2} "
 			"-o {output.illumina_adapter_trimmed_fastq1} -O {output.illumina_adapter_trimmed_fastq2} "
 			"-h {output.fastp_html_report} "
-			"-j {output.fastp_json_report} \n" # Run fastp 
-
-		"mkdir -p {params.report_path} && "
-			"fastqc -t {threads} --noextract --nogroup "
-				"-o {params.report_path} "
-				"{input.raw_fastq1} {input.raw_fastq2}" # Run fastqc 
+			"-j {output.fastp_json_report}" # Run fastp  
 
 rule preprocessing:
 	input:
-		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_fastq1.gz", 
-		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
+		illumina_adapter_trimmed_fastq1 = "{sample}/{sample}_illumina_adapter_trimmed_R1.fq.gz", 
+		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_R2.fq.gz",
 	output:
-		L1HS_adapter_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq1.gz"),
-		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz",
-		L1HS_primer_trimmed_fromR2_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq1.gz"),
-		L1HS_primer_trimmed_fromR2_fastq2 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_fastq2.gz"),
-		subfamily_specific_R2_list = "{sample}/{sample}_subfamily_specific_R2_list.txt",
-		L1HS_adapter_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_adapter_trimmed_fromR1_fastq1.gz"),
-		L1HS_primer_trimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_primer_trimmed_fromR1_fastq1.gz"),
-		L1HS_untrimmed_fromR1_fastq1 = temp("{sample}/{sample}_L1HS_untrimmed_fromR1_fastq1.gz"),
-		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
-		mappable_R1_fastq1 = temp("{sample}/{sample}_mappable_R1_fastq1.gz"),
-		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
-		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz",
+		L1HS_primer_trimmed_fromR2_fastq1 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_R1.fq.gz",
+		L1HS_primer_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_R2.fq.gz",
+		L1_young_seq_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1_young_seq_trimmed_fromR2_R2.fq.gz",
+		young_L1_readID_list = "{sample}/{sample}_young_L1_readID_list.txt",
+		young_L1_reads_fromR1_fastq1 = "{sample}/{sample}_young_L1_reads_fromR1_R1.fq.gz",
+		mappable_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_L1HSsequence_trimmed_fromR1_R1.fq.gz",
+		mappable_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_L1HSsequence_polyA_fromR1_R1.fq.gz",
 		cutadapt_report = "{sample}/reports/{sample}_cutadapt_report.txt"
 	benchmark:
 		"benchmarks/preprocessing/{sample}.tsv"
 	params:
-		min_len = 5,
-		min_len_informative = 70,
-		min_ovlp = 20,
-		max_err = 0.05,
-		adapter_L1HS = lambda wildcards: samples.loc[wildcards.sample]["index_seq"] + "GGGAGATATACCTAATGCTAGATGACAC",
-		adapter_primer = "^TTAGTGGGTGCAGCGCACCA",
-		adapter_overlap_L1HS = "GTGTCATCTAGCATTAGGTATATCTCCC",
-		adapter_overlap_primer = "TGGTGCGCTGCACCCACTAA$",
-		L1PA_young_seq = "TTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
+		min_len = 20,
+		L1HS_primer = lambda wildcards: get_index_seq(wildcards, samples) + "GGGAGATATACCTAATGCTAGATGACAC",
+		L1PA_young_seq = "GTTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
 		L1HSseq = "ATTATACTCTAAGTTTTAGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAATGTGTCATCTAGCATTAGGTATATCTCCC",
-		max_err_T = 0,
-		adapter_T = "TTTTTTTT" 
+		adapter_T = "TTTTTTTT"
 	threads: 4
 	resources:
 		runtime = get_preprocessing_runtime,
@@ -151,16 +139,16 @@ rule preprocessing:
 rule alignment:
 	input:
 		ref_genome = REF_GENOME,
-		mappable_R1_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_trimmed_fromR1_fastq1.gz",
-		mappable_R1_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_R1_L1HSsequence_polyA_fromR1_fastq1.gz"
+		mappable_L1HSseq_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_L1HSsequence_trimmed_fromR1_R1.fq.gz",
+		mappable_L1HSseq_polyA_trimmed_fromR1_fastq1 = "{sample}/{sample}_mappable_L1HSsequence_polyA_fromR1_R1.fq.gz"
 	output:
 		bwa_bam = temp("{sample}/{sample}_bwa.bam"),
 		bwa_sorted_bam = "{sample}/{sample}_bwa_sorted.bam", 
 		bwa_sorted_index = "{sample}/{sample}_bwa_sorted.bam.bai",
 		trim_bwa_bam = temp("{sample}/{sample}_trim_bwa.bam"),
 		trim_uniq_bam = temp("{sample}/{sample}_trim_uniq.bam"), 
-		trim_uniq_sorted_bam = "{sample}/{sample}_trim_uniq_sorted.bam", # polyT-trimmed reads
-		trim_uniq_sorted_index = "{sample}/{sample}_trim_uniq_sorted.bam.bai",
+		trim_uniq_sorted_bam = temp("{sample}/{sample}_trim_uniq_sorted.bam"), # polyT-trimmed reads
+		trim_uniq_sorted_index = temp("{sample}/{sample}_trim_uniq_sorted.bam.bai"),
 		trim_peaks = "{sample}/{sample}_trim_peaks.bed",
 		peak_sorted_bam = "{sample}/{sample}_peak_sorted_bwa.bam",
 		peak_sorted_index = "{sample}/{sample}_peak_sorted_bwa.bam.bai"
@@ -179,8 +167,8 @@ rule alignment:
 
 rule Ntag:
 	input:
-		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_fastq2.gz",
-		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt"
+		illumina_adapter_trimmed_fastq2 = "{sample}/{sample}_illumina_adapter_trimmed_R2.fq.gz",
+		young_L1_readID_list = "{sample}/{sample}_young_L1_readID_list.txt"
 	output:
 		Ntag_pre_fastq2 = temp("{sample}/{sample}_Ntag_pre_fastq2.gz"),
 		Ntag_trimmed_fastq2 = temp("{sample}/{sample}_Ntag_trimmed_fastq2.gz"),
@@ -193,7 +181,7 @@ rule Ntag:
 		runtime = get_Ntag_runtime,
 		mem_mb = get_Ntag_mem_mb
 	shell:
-		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.mappable_R1_list} | gzip - "
+		"seqtk subseq {input.illumina_adapter_trimmed_fastq2} {input.young_L1_readID_list} | gzip - "
 			"> {output.Ntag_pre_fastq2} \n"
 		"cutadapt --quiet --discard-untrimmed -a {params.adapter} "
 			"-o {output.Ntag_trimmed_fastq2} {output.Ntag_pre_fastq2} \n"
@@ -206,8 +194,8 @@ rule Ntag:
 
 rule gmotif:
 	input:
-		mappable_R1_list = "{sample}/{sample}_mappable_R1_list.txt",
-		L1HS_adapter_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_adapter_trimmed_fromR2_fastq2.gz"
+		L1HS_primer_trimmed_fromR2_fastq2 = "{sample}/{sample}_L1HS_primer_trimmed_fromR2_R2.fq.gz",
+		young_L1_readID_list = "{sample}/{sample}_young_L1_readID_list.txt"
 	output:
 		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt"
 	benchmark:
@@ -216,7 +204,7 @@ rule gmotif:
 		runtime = get_gmotif_runtime,
 		mem_mb = get_gmotif_mem_mb
 	shell:
-		"seqtk subseq {input.L1HS_adapter_trimmed_fromR2_fastq2} {input.mappable_R1_list} | "
+		"seqtk subseq {input.L1HS_primer_trimmed_fromR2_fastq2} {input.young_L1_readID_list} | "
 			"seqtk seq -a - | "
 			"grep 'CTTAGAGT' -B 1 | "
 			"seqkit seq -i -n - | sort | uniq "
