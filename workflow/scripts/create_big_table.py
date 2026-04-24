@@ -82,6 +82,7 @@ del intersect
 
 usp = pd.read_table(snakemake.input.unique_start_positions, sep="\t", header=0)
 usp.columns = usp.columns.str.strip("#")
+usp["unique_read_ratio"] = usp["num_peak_unique_reads"] / usp["num_peak_reads"]
 big_table = big_table.merge(usp, how="left", on="peak_name")
 del usp
 

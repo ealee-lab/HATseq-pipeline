@@ -32,13 +32,15 @@ colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
   "reads","Ntag","gmotif","polyA","breakpoint","bp_chimera_len","bp_chimera_ratio",
   "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
-  "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads",
-  "usp","max_usp_diff","median_usp_diff","mean_usp_diff","RPM","nearest_peak",
+  "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads","uniqreads",
+  "usp","unique_read_ratio","RPM","nearest_peak",
   "SegDups","max_distance"
 )
 
 # Define more columns
+big_table$peak_width <- big_table$end - big_table$start
 big_table$gmotif_percent <- big_table$gmotif / big_table$reads
+
 big_table <- merge(
   big_table, 
   big_table[, c("RPM","peak")], 
@@ -50,6 +52,7 @@ big_table <- merge(
 big_table$nearest_RPM_ratio <- big_table$RPM / big_table$RPM_nearest
 big_table$nearest_RPM_ratio[is.na(big_table$nearest_RPM_ratio)] <- 1
 big_table$RPM_log <- log(big_table$RPM)
+
 big_table$number_templates <- as.numeric(
   unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 1))
 )
@@ -214,6 +217,15 @@ if (library != "bulk") {
   )
 }
 
+big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$unique_read_ratio < 0.1)] <- "read_ratio"
+big_table$FP[big_table$filter_reason == "read_ratio"] <- TRUE
+cat(
+  paste0("\t\tFew unique reads: ", 
+    nrow(big_table[big_table$filter_reason == "read_ratio",])), 
+  file=summary_file, 
+  sep="\n"
+)
+
 if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 0.2)] <- "polyApercent"
 } else if (library == "micro") {
@@ -252,6 +264,17 @@ cat(
   file=summary_file, 
   sep="\n"
 )
+
+if (library == "single") {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$peak_width < 150)] <- "peak_width"
+  big_table$FP[big_table$filter_reason == "peak_width"] <- TRUE
+  cat(
+    paste0("\t\tPeak width: ",
+      nrow(big_table[big_table$filter_reason == "peak_width",])), 
+    file=summary_file, 
+    sep="\n"
+  )
+}
 
 big_table$classification[big_table$FP] <- "FP"
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
