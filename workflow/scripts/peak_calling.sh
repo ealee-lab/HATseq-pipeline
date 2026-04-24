@@ -10,7 +10,7 @@ cat <( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -strand
 	<( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -strand - | \
 	awk '{OFS="\t"; print $1,$2,$3,$4,".","-",$3-$2}' ) | \
 	sort -k1,1 -k2,2n | \
-	mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | \
+	mergeBed -d 5 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | \
 	awk -v sample="${snakemake_wildcards[sample]}" \
 		'{ OFS="\t"; \
 		if($6 == "+") \
