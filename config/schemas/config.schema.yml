@@ -26,9 +26,10 @@ properties:
   sequencing_platform:
     type: string
     description: sequencing platform used 
-  sequencing_center:
+  adapter_sequence:
     type: string
-    description: sequencing_center used
+    description: illumina adapter used, written 5' to 3'
+    pattern: "^[ACGT]+$"
 
 required:
   - metadata
@@ -37,4 +38,4 @@ required:
   - reference_dir
   - library
   - sequencing_platform
-  - sequencing_center
+  - illumina_adapter
