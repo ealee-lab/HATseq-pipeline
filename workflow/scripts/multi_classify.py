@@ -17,14 +17,14 @@ def get_multiintvls(bedtools):
     intvls = intvls.cut([0,1,2,3])
     return intvls
 
-def get_peaks_for_multiintvls(peak_list, intvls, donor):
+def get_peaks_for_multiintvls(peaks_list, intvls, donor):
     """Find the corresponding sample-specific peak for each interval."""
     sample_dfs = []
 
-    for sample_peaks in peak_list:
+    for sample_peaks in peaks_list:
         sample_intvls = sample_peaks.intersect(intvls, wa=True, wb=True)
         sample_df = sample_intvls.to_dataframe(disable_auto_names=True, header=None)
-
+        
         sample_df.columns = [
             "chrm_s","start_s","end_s","peak",
             "RPM","strand","classification","filter",
@@ -38,35 +38,27 @@ def get_peaks_for_multiintvls(peak_list, intvls, donor):
                        "classification","filter","peak","num"]]
 
     peak_df = peak_df.sort_values(by="name")
+    
     return peak_df
 
 def filter_multiintvls(peak_df, n):
-    """Determine which intervals likely represent putative insertions. 
-    These intervals will be re-classified based on information from
-    multiple samples."""
-    
+    """Filter for intervals that likely represent putative insertions."""
     # Only re-classify putative insertions in >= n samples
     multi_peaks = peak_df[peak_df["num"] >= n]
     
     put_peaks = multi_peaks[(multi_peaks["classification"] == "UNK") | 
                             (multi_peaks["classification"].str.contains("SOM"))]["name"].unique()
-    # known_peaks = multi_peaks[multi_peaks["classification"].isin(["KR","KNR","Off-target"])]["name"].unique()
-    # filter_peaks = multi_peaks[~(multi_peaks["filter"].isin(["-NA-","RPM","polyApercent","templates"]))]["name"].unique()
 
-    # Interval must be UNK/SOM in >= 1 sample... 
-    # AND not KR/KNR/Off-target in any sample...
-    # AND not labeled as artifact in any sample
+    # Interval must be UNK/SOM in >= 1 sample
     multi_df = multi_peaks[multi_peaks["name"].isin(put_peaks)]
-    # multi_df = multi_df[~multi_df["name"].isin(known_peaks)]
-    # multi_df = multi_df[~multi_df["name"].isin(filter_peaks)]
-
+    
     return multi_df
 
 def merge_multiintvls(multi_df, donor):
     """Merge adjacent intervals."""
     sort_df = multi_df.sort_values(by=["chrm","start"])
     merged_bt = BedTool.from_dataframe(sort_df).merge(
-        d=200, c=[5,6,7,9,10], 
+        d=150, c=[5,6,7,9,10], 
         o=["collapse","collapse","collapse","collapse","max"])
     
     merged_df = merged_bt.to_dataframe(disable_auto_names=True, header=None)
@@ -78,6 +70,8 @@ def merge_multiintvls(multi_df, donor):
     return merged_df
 
 def extract_num(peaks, comparison):
+    """Re-count the number of samples corresponding to each interval.
+    Merging may join multiple sub-intervals, necessitating a re-count."""
     if comparison == "rep":
         # Extract replicate substring
         samples = peaks.str.extract(r'.*_([A-Z][0-9]+)-(?:plus|minus)-peak-[0-9]+')
@@ -130,6 +124,7 @@ def reclassify_peaks_by_label(format_df):
     reclass_df.loc[idxs, "classification"] = "UNK"
 
     if private_counts.sum() == 0 & clonal_counts.sum() == 0:
+        # Classify all multi-peaks as SOM if no distinction btwn private and clonal
         reclass_df.loc[~idxs, "classification"] = "SOM"
     else:
         # Classify as clonal if at least one rep is labeled clonal
@@ -144,7 +139,7 @@ def reclassify_peaks_by_label(format_df):
     return reclass_df
 
 def reclassify_peaks_by_signal(format_df, n):
-    """Re-classify putative insertions based on information from n tissues/cells."""
+    """Re-classify peaks based on information from n tissues/cells."""
     reclass_df = format_df.copy()
 
     # Peak is in some samples
@@ -166,21 +161,19 @@ def reclassify_peaks_by_signal(format_df, n):
     return reclass_df
 
 def get_multi_peaks(reclass_df):
-    """Write all re-classified multi-sample peaks for the given donor."""
-    # out_df = reclass_df.copy()
+    """Get all re-classified multi-sample peaks for the given donor."""
     out_df = reclass_df[["chrm","start","end","name","RPM","strand","classification","peaks","num"]]
     out_df = out_df.sort_values(by="name", key=natsort_key)
-    # out_df.to_csv(multifile, sep="\t", index=False, header=True)
     return out_df
 
-def get_reclassified_peaks(reclass_df, peak_list, true_df):
+def get_reclassified_peaks(reclass_df, peaks_list):
     col_df = reclass_df[["classification","peaks"]]
     col_df["peaks"] = col_df["peaks"].str.split(",")
     col_df = col_df.explode("peaks").reset_index(drop=True)
     col_df.columns = ["donor_class","peak"]
 
     out_dfs = []
-    for sample_peaks in peak_list:
+    for sample_peaks in peaks_list:
         out_df = sample_peaks.merge(col_df, how="left", on="peak")
         out_df.loc[~out_df["donor_class"].isna(), "classification"] = out_df["donor_class"]
         out_df.loc[~out_df["donor_class"].isna(), "filter_reason"] = "multi-sample"
@@ -189,14 +182,14 @@ def get_reclassified_peaks(reclass_df, peak_list, true_df):
 
     all_df = pd.concat(out_dfs).sort_values(by=["chrm","start"], key=natsort_key)
 
-    if len(true_df) > 0:
-        all_df = all_df.merge(true_df, how="left", on="peak")
+    # if len(true_df) > 0:
+    #     all_df = all_df.merge(true_df, how="left", on="peak")
 
     all_df = all_df.drop_duplicates(keep='first')
-    # all_df.to_csv(peakfile, sep="\t", index=False, header=True)
     return all_df
 
 def get_cat_peaks(filenames):
+    """Concatenate peaks given file names."""
     file_dfs = []
     for file in filenames:
         file_df = pd.read_csv(file, sep="\t")
@@ -205,40 +198,32 @@ def get_cat_peaks(filenames):
 
     return df, pd.DataFrame()
 
-def extract_true_peaks(file_dfs):
-    """Given a list of data frames, return a data frame containing all true 
-    peaks."""
-    benchmark_dfs = []
-
-    for file_df in file_dfs:
-        if "true_insertion_ID" in file_df.columns:
-            benchmark_dfs.append(file_df[["peak","true_insertion_ID"]])
-            file_df.drop(columns="true_insertion_ID", inplace=True)
-        
-    if len(benchmark_dfs) != 0:
-        benchmark_df = pd.concat(benchmark_dfs)
-    else:
-        benchmark_df = pd.DataFrame()
-    
-    return file_dfs, benchmark_df
-
-def read_sample_peaks(filenames):
+def read_sample_peaks(files):
     file_dfs = []
+    analysis_dfs = []
 
-    for file in filenames:
-        file_df = pd.read_csv(file, sep="\t")
+    for file in files:
+        if isinstance(file, (str, os.PathLike)):
+            file_df = pd.read_csv(file, sep="\t")
+        elif isinstance(file, pd.DataFrame):
+            file_df = file
+        else:
+            raise ValueError("Invalid data type")
+        
+        analysis_df = file_df.iloc[:, 0:8]
 
         # Remove known peaks
-        file_df = file_df[~file_df["classification"].str.contains(r'KR|KNR|Off-target')]
+        analysis_df = analysis_df[~analysis_df["classification"].str.contains(r'KR|KNR|Non-specific')]
 
         # Remove artifacts and peaks in error-prone regions
-        file_df = file_df[~file_df["filter_reason"].str.contains(r'nearby|chimera|error')]
+        analysis_df = analysis_df[~analysis_df["filter_reason"].str.contains(r'nearby|error-prone')]
 
-        file_df = file_df.sort_values(by=["chrm","start"])
+        analysis_df = analysis_df.sort_values(by=["chrm","start"])
+
         file_dfs.append(file_df)
+        analysis_dfs.append(analysis_df)
     
-    peak_dfs, benchmark_df = extract_true_peaks(file_dfs)
-    return peak_dfs, benchmark_df
+    return analysis_dfs, file_dfs
 
 def run_comparison(peaks, donor, comparison, num_samples, min_samples):
     if num_samples < min_samples:
@@ -248,14 +233,9 @@ def run_comparison(peaks, donor, comparison, num_samples, min_samples):
         else:
             raise ValueError("Must use file names")
     else:
-        if isinstance(peaks[0], (str, os.PathLike)):
-            file_dfs, benchmark_df = read_sample_peaks(peaks)
-        elif isinstance(peaks[0], pd.DataFrame):
-            file_dfs, benchmark_df = extract_true_peaks(peaks)
-        else:
-            raise ValueError("Unsupported data type")
-
-        bedtools = [BedTool.from_dataframe(df) for df in file_dfs]
+        analysis_dfs, file_dfs = read_sample_peaks(peaks)
+        print(analysis_dfs[0])
+        bedtools = [BedTool.from_dataframe(df) for df in analysis_dfs]
         
         intvls = get_multiintvls(bedtools)
         peak_df = get_peaks_for_multiintvls(bedtools, intvls, donor)
@@ -268,7 +248,7 @@ def run_comparison(peaks, donor, comparison, num_samples, min_samples):
         else:
             reclass_df = reclassify_peaks_by_signal(format_df, num_samples)
 
-        peakfile_df = get_reclassified_peaks(reclass_df, file_dfs, benchmark_df)
+        peakfile_df = get_reclassified_peaks(reclass_df, file_dfs)
         multifile_df = get_multi_peaks(reclass_df)
 
     return peakfile_df, multifile_df
