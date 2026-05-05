@@ -175,12 +175,12 @@ cat(
   sep="\n"
 )
 
-# Label Off-target peaks
-big_table$classification[grepl("L1PA2|L1PA3|L1PA4|L1PA5|L1PA6|L1PA7", big_table$repeatmasker) & 
+# Label Non-specific peaks
+big_table$classification[grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$repeatmasker) & 
                         !(big_table$classification == "KR") & 
                         !(big_table$classification == "KNR") &
-                        !(big_table$FP)] <- "Off-target"
-big_table$filter_reason[big_table$classification == "Off-target"] <- "Off-target"
+                        !(big_table$FP)] <- "Non-specific"
+big_table$filter_reason[big_table$classification == "Non-specific"] <- "Non-specific"
 
 # Filter remaining peaks for FPs
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
@@ -198,7 +198,13 @@ cat("\n\tCandidate peaks", file=summary_file, sep="\n")
 
 if (library != "bulk") {
   # Require multi-template support for PTA libraries
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
+  if (library == "single") {
+    big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$TPM < 0.25)] <- "templates"
+  } else if (library == "micro") {
+    big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
+  }
+
+  # big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
   big_table$FP[big_table$filter_reason == "templates"] <- TRUE
   cat(
     paste0("\t\tToo few templates: ", 
@@ -207,14 +213,14 @@ if (library != "bulk") {
     sep="\n"
   )
 
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.25)] <- "template_ratio"
-  big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
-  cat(
-    paste0("\t\tTemplate ratio: ",
-      nrow(big_table[big_table$filter_reason == "template_ratio",])), 
-    file=summary_file, 
-    sep="\n"
-  )
+  # big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.25)] <- "template_ratio"
+  # big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
+  # cat(
+  #   paste0("\t\tTemplate ratio: ",
+  #     nrow(big_table[big_table$filter_reason == "template_ratio",])), 
+  #   file=summary_file, 
+  #   sep="\n"
+  # )
 }
 
 big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$unique_read_ratio < 0.1)] <- "read_ratio"
@@ -242,7 +248,7 @@ cat(
   sep="\n"
 )
 
-# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$breakpoint < 0.8)] <- "breakpoint"
+# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$breakpoint < 0.7)] <- "breakpoint"
 # big_table$FP[big_table$filter_reason == "breakpoint"] <- TRUE
 # cat(
 #   paste0("\t\tInconsistent breakpoints: ", 
@@ -332,8 +338,8 @@ cat(
     sep="\n"
 )
 cat(
-  paste0("Total Off-target: ", 
-    nrow(big_table[big_table$classification == "Off-target",])), 
+  paste0("Total Non-specific: ", 
+    nrow(big_table[big_table$classification == "Non-specific",])), 
   file=summary_file, 
   sep="\n"
 )
