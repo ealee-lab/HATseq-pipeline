@@ -1,5 +1,5 @@
 # HAT-seq Pipeline #
-This is a pipeline for the Human Active Transposon sequencing methodology. 
+This is a pipeline to analyze **e**nhanced **H**uman **A**ctive **T**ransposon **seq**uencing (eHAT-seq) libraries. 
 
 # Setting up the Pipeline #
 ## Reference Folder ##
@@ -70,3 +70,23 @@ That being said, if the allocated resources are insufficient, users have several
 For a more permanent solution, users should locate the corresponding rule and resource in `rules/common.smk` and increase resources. For example, if the pipeline errors on the preprocessing rule with an Out of Memory error, locate the `get_preprocessing_mem_mb()` function in `common.smk` and type in amount of memory (in MB) you would like to request for that rule.
 
 Lastly, users can override the resource requirements set in `common.smk` by adding the options `--default-resources RESOURCE=VALUE` or `--set-resources RULE:RESOURCE=VALUE` (for specific rules) to the running command in `run_HATseq-pipeline.sh`.
+
+# Changelog #
+**v0.3.0** May 5 2026
+- Refactor rules into individual files, add conda and log directives, remove benchmark directives
+- Add KR/KNR/Non-specific peaks to all_classified_peaks.bed
+- Remove ALR/Alpha, misaligned, chimera, and template_ratio filters; add unique_read_ratio and peak_width filters
+- Modifications to `reference/RepeatMasker` BED files, including separate Satellites file
+- Narrow region used for Non-specific classification to +/- 500bp of 3' end
+- Rename Off-target class to Non-specific
+- Incorporate alignment info in extract_clipping and junction_spanning rules
+- Fix indexing error in extract_clipping
+- Merge peaks within 5bp of each other during peak calling
+- Simplify preprocessing rule
+
+**v0.2.0** Mar 16 2026
+- Add support for multi-sample classification across tissues AND replicates
+- Add exact values for chimera and A/T-rich (prev. misaligned) filters
+
+**v0.1.0** Feb 20 2026
+- Frozen version for SMaHT MEI benchmarking paper 
