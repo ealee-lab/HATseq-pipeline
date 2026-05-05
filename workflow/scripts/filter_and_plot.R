@@ -31,7 +31,7 @@ big_table <- read.table(big_table_file, sep="\t", header=TRUE)
 colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
   "reads","Ntag","gmotif","polyA","breakpoint","bp_chimera_len","bp_chimera_ratio",
-  "repeatmasker","evrony","homopolymers","i1kgp","gnomad","nyuwa",
+  "repeatmasker","evrony","satellites","i1kgp","gnomad","nyuwa",
   "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads","uniqreads",
   "usp","unique_read_ratio","RPM","nearest_peak",
   "SegDups","max_distance"
@@ -101,7 +101,7 @@ cat(paste0("Total peaks: ", nrow(big_table)), file=summary_file, sep="\n")
 cat("\nANNOTATIONS", file=summary_file, sep="\n")
 cat(
   paste0("Total peaks overlapping ALR/Alpha satellites (centromeres): ", 
-    nrow(big_table[grepl("ALR/Alpha", big_table$repeatmasker),])), 
+    nrow(big_table[grepl("ALR/Alpha", big_table$satellites),])), 
   file=summary_file, 
   sep="\n"
 )

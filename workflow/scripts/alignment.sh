@@ -3,18 +3,18 @@
 exec 2> "${snakemake_log[0]}"
 
 # Map mappable parts of R1 to reference genome
-bwa mem -t ${snakemake[threads]} -R $(echo ${snakemake_params[RG_ID]}) \
+bwa mem -t ${snakemake_params[cores]} -R $(echo ${snakemake_params[RG_ID]}) \
 	"${snakemake_input[ref_genome]}" \
-	"${snakemake_input[mappable_L1HSseq_trimmed_fromR1_fastq1]}" | \
+	"${snakemake_input[L1HS_trim_fromR1_fq1]}" | \
 	samtools view -Sb - \
 	> "${snakemake_output[bwa_bam]}"
 
 samtools sort -o "${snakemake_output[bwa_sorted_bam]}" "${snakemake_output[bwa_bam]}" 
 samtools index "${snakemake_output[bwa_sorted_bam]}" 
 
-bwa mem -t ${snakemake[threads]} -R $(echo ${snakemake_params[RG_ID]}) \
+bwa mem -t ${snakemake_params[cores]} -R $(echo ${snakemake_params[RG_ID]}) \
 	"${snakemake_input[ref_genome]}" \
-	"${snakemake_input[mappable_L1HSseq_polyA_trimmed_fromR1_fastq1]}" | \
+	"${snakemake_input[L1HS_polyA_trim_fromR1_fq1]}" | \
 	samtools view -Sb - \
 	> "${snakemake_output[trim_bwa_bam]}" 
 	

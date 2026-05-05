@@ -74,7 +74,7 @@ del chimera
 
 intersect = pd.read_table(snakemake.input.intersect_annotated, sep="\t", header=0)
 big_table = big_table.merge(
-	intersect[['peak_name','RepeatMasker','Evrony_KR','Homopolymers',
+	intersect[['peak_name','RepeatMasker','Evrony_KR','Satellites',
 			   '1000_Genomes_Project','gnomAD','NyuWa','xTea',
 			   'HGSVC3','HGSVC3-MELT-LRA','1019_ONT']], 
 	how="left", on="peak_name")
