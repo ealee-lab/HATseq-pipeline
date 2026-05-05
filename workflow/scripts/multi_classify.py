@@ -227,7 +227,7 @@ def read_sample_peaks(files):
 
 def run_comparison(peaks, donor, comparison, num_samples, min_samples):
     if num_samples < min_samples:
-        if isinstance(peaks[0], os.PathLike):
+        if isinstance(peaks[0], (str, os.PathLike)):
             # Concatenate files without comparison if too few samples
             peakfile_df, multifile_df = get_cat_peaks(peaks)
         else:
