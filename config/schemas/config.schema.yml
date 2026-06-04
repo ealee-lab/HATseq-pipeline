@@ -23,6 +23,7 @@ properties:
   library:
     type: string
     description: library type (bulk, single, microbulk)
+    pattern: "bulk|single|micro"
   sequencing_platform:
     type: string
     description: sequencing platform used 
