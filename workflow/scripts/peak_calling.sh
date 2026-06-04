@@ -5,12 +5,14 @@ exec 2> "${snakemake_log[0]}"
 echo -e '#chr\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' \
 	> "${snakemake_output[peaks]}" 
 
+if [[ "${snakemake_params[library]}" == "bulk" ]]; then dist=10; else dist=0; fi
+
 cat <( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -strand + | \
 	awk '{OFS="\t"; print $1,$2,$3,$4,".","+",$3-$2}' ) \
 	<( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -strand - | \
 	awk '{OFS="\t"; print $1,$2,$3,$4,".","-",$3-$2}' ) | \
 	sort -k1,1 -k2,2n | \
-	mergeBed -d 5 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | \
+	mergeBed -d ${dist} -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | \
 	awk -v sample="${snakemake_wildcards[sample]}" \
 		'{ OFS="\t"; \
 		if($6 == "+") \
@@ -36,14 +38,14 @@ awk '{ OFS="\t"; \
 				{stop=0} } } print $4,sum }' "${snakemake_output[peaks]}" \
 	> "${snakemake_output[max_depth]}" 
 
-slopBed -l 30 -r 0 -s -g "${snakemake_input[hg38]}" \
-	-i <(awk '{ OFS="\t"; \
-		if($6 == "-") \
-			{print $1,$2,$2+1,$4,$5,$6} \
-		else \
-			{print $1,$3,$3+1,$4,$5,$6} }' "${snakemake_output[peaks]}") | \
-	bedtools getfasta -fi "${snakemake_input[ref_genome]}" -bed stdin -name \
-	> "${snakemake_output[breakpoint_fa]}" 
+# slopBed -l 30 -r 0 -s -g "${snakemake_input[hg38]}" \
+# 	-i <(awk '{ OFS="\t"; \
+# 		if($6 == "-") \
+# 			{print $1,$2,$2+1,$4,$5,$6} \
+# 		else \
+# 			{print $1,$3,$3+1,$4,$5,$6} }' "${snakemake_output[peaks]}") | \
+# 	bedtools getfasta -fi "${snakemake_input[ref_genome]}" -bed stdin -name \
+# 	> "${snakemake_output[breakpoint_fa]}" 
 
 bedtools getfasta -fi "${snakemake_input[ref_genome]}" -bed "${snakemake_output[peaks]}" -name \
 	> "${snakemake_output[peak_seq]}" 

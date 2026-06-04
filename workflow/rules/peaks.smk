@@ -6,10 +6,12 @@ rule peak_calling:
 		ref_genome = config["bwa_ref_genome"],
 		hg38 = f"{ref_dir}/human/hg38.genome",
 	output:
-		peaks = "{sample}/{sample}_peaks.bed",
-		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		breakpoint_fa = temp("{sample}/{sample}_breakpoint.fa"),
-		peak_seq = "{sample}/{sample}_peak_sequence.fa"
+        peaks="{sample}/{sample}_peaks.bed",
+        max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
+        # breakpoint_fa=temp("{sample}/{sample}_breakpoint.fa"),
+        peak_seq="{sample}/{sample}_peak_sequence.fa"
+    params:
+        library = config["library"]
 	resources:
 		runtime = get_peak_calling_runtime,
 		mem_mb = get_peak_calling_mem_mb
