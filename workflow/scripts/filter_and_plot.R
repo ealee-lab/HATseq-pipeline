@@ -248,14 +248,16 @@ cat(
   sep="\n"
 )
 
-# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$breakpoint < 0.7)] <- "breakpoint"
-# big_table$FP[big_table$filter_reason == "breakpoint"] <- TRUE
-# cat(
-#   paste0("\t\tInconsistent breakpoints: ", 
-#     nrow(big_table[big_table$filter_reason == "breakpoint",])), 
-#   file=summary_file, 
-#   sep="\n"
-# )
+if (library != "bulk") {
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$breakpoint <= 0.5)] <- "breakpoint"
+  big_table$FP[big_table$filter_reason == "breakpoint"] <- TRUE
+  cat(
+    paste0("\t\tInconsistent breakpoints: ", 
+      nrow(big_table[big_table$filter_reason == "breakpoint",])), 
+    file=summary_file, 
+    sep="\n"
+  )
+}
 
 if (library == "single") {
   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < 5)] <-"RPM"

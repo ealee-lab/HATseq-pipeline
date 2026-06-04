@@ -1,7 +1,17 @@
 import pandas as pd
 import statistics
-# import pybedtools
-# from pybedtools import BedTool
+
+
+def calculate_breakpoint_concordance(x):
+	bps = [int(y) for y in x if y >= 0]
+
+	if len(bps) > 0:
+		bp_near = [d for d in bps if d <= 8]
+		bp_pct = len(bp_near) / len(bps)
+	else:
+		bp_pct = -1
+	return bp_pct
+
 
 peaks = pd.read_table(
 	snakemake.input.peaks, sep="\t", skiprows=1, header=None, 
@@ -12,55 +22,58 @@ readIDs = pd.read_table(
 peaks = peaks.merge(readIDs, how="left", on="peak_name")
 del readIDs
 
-Ntag = pd.read_table(snakemake.input.Ntag_list, sep="\t", 
-					 header=None, names=["read","Ntag"])
-peaks = peaks.merge(Ntag, how="left", on="read").fillna("")
-del Ntag
+# Ntag = pd.read_table(snakemake.input.Ntag_list, sep="\t", 
+# 					 header=None, names=["read","Ntag"])
+# peaks = peaks.merge(Ntag, how="left", on="read").fillna("")
+# del Ntag
 
 gmotif = pd.read_table(snakemake.input.pass_gmotif_list, sep="\t", header=None, names=["read"])
 gmotif["gmotif"] = "pass_" + gmotif["read"]
 peaks = peaks.merge(gmotif, how="left", on="read").fillna("fail")
 del gmotif
 
-clippoints = pd.read_table(
-	snakemake.input.softclip3p_table, sep="\t", header=None, 
-	usecols=[0,1,2,3], names=["read","chr","clippoint","strand"])
-peaks = peaks.merge(clippoints, how="left", on=["read","chr","strand"]).fillna(-1)
-# peaks = peaks.astype({"clippoint": "int"})
-del clippoints
+endpoints = pd.read_table(
+	snakemake.input.endpoint3p_table, sep="\t", header=None, 
+	names=["read","chr","endpoint","strand","clip_seq"])
+peaks = peaks.merge(endpoints, how="left", on=["read","chr","strand"]).fillna(".")
+del endpoints
 
 # Remove rows where clipped read is incorrectly matched to peak
-peaks = peaks[(peaks["clippoint"] == -1) | 
-			  ((peaks["clippoint"] >= peaks["start"]) & (peaks["clippoint"] <= peaks["end"]))]
+peaks = peaks[(peaks["endpoint"] >= peaks["start"]) & (peaks["endpoint"] <= peaks["end"])]
 
 polyA = pd.read_table(
 	snakemake.input.polyT_reads, sep="\t", header=None, 
-	usecols=[0,1,2,3], names=["read","chr","clippoint","strand"])
+	usecols=[0,1,2,3], names=["read","chr","endpoint","strand"])
 polyA["polyA"] = "pass_" + polyA['read']
-peaks = peaks.merge(polyA, how="left", on=["read","chr","clippoint","strand"]).fillna("fail")
+peaks = peaks.merge(polyA, how="left", on=["read","chr","endpoint","strand"]).fillna("fail")
 del polyA
 
 breakpoints = peaks[peaks["polyA"] != "fail"].groupby("peak_name").agg(
-	breakpoint=('clippoint', lambda x: statistics.mode(x))
+	breakpoint=('endpoint', lambda x: statistics.mode(x))
 ).reset_index()
 peaks = peaks.merge(breakpoints, how="left", on="peak_name").fillna(-1)
 
+# Calculate distance from breakpoint for select set of reads
 peaks["bp_dist"] = -1
-peaks.loc[peaks["clippoint"] > -1, "bp_dist"] = abs(peaks["clippoint"] - peaks["breakpoint"])
 
-def calculate_breakpoint_concordance(x):
-	bps = [int(y) for y in x if y > -1]
+# Distance for all clipped reads
+peaks.loc[
+	(peaks["breakpoint"] > 0) &
+	(peaks["clip_seq"] != "."), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
 
-	if len(bps) > 0:
-		bp_near = [d for d in bps if d < 10]
-		bp_pct = len(bp_near) / len(bps)
-	else:
-		bp_pct = -1
-	return bp_pct
+# Distance for all reads extending past the breakpoint
+peaks.loc[
+	(peaks["breakpoint"] > 0) & 
+	(peaks["endpoint"] >= peaks["breakpoint"]) &
+	(peaks["strand"] == "+"), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
+peaks.loc[
+	(peaks["breakpoint"] > 0) & 
+	(peaks["endpoint"] <= peaks["breakpoint"]) &
+	(peaks["strand"] == "-"), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
 
 big_table = peaks.groupby(["chr","start","end","peak_name","shape","strand"]).agg({
 	'read': lambda x: len(list(set(x))),
-	'Ntag': lambda x: ",".join([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
+	# 'Ntag': lambda x: ",".join([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
 	'gmotif': lambda x: len(list(set([y for y in x if y != "fail"]))),
 	'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
 	'bp_dist': lambda x: calculate_breakpoint_concordance(x)
