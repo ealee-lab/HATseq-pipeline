@@ -120,17 +120,15 @@ def reclassify_peaks_by_label(format_df):
     clonal_counts = reclass_df["classes"].str.count("SOM_clonal")
 
     # Classify as UNK if more reps are labeled UNK than SOM
-    idxs = unk_counts > som_counts
-    reclass_df.loc[idxs, "classification"] = "UNK"
+    unk_idxs = unk_counts > som_counts
+    reclass_df.loc[unk_idxs, "classification"] = "UNK"
+    reclass_df.loc[~unk_idxs, "classification"] = "SOM"
 
-    if private_counts.sum() == 0 & clonal_counts.sum() == 0:
-        # Classify all multi-peaks as SOM if no distinction btwn private and clonal
-        reclass_df.loc[~idxs, "classification"] = "SOM"
-    else:
-        # Classify as clonal if at least one rep is labeled clonal
-        som_idxs = clonal_counts >= 1
-        reclass_df.loc[som_idxs, "classification"] = "SOM_clonal"
-        reclass_df.loc[~som_idxs, "classification"] = "SOM_private"
+    # Where there is a distinction between clonal and private peaks...
+    if private_counts.sum() > 0 or clonal_counts.sum() > 0:
+        clonal_idxs = clonal_counts >= 1 # call clonal if >= 1 rep is labeled clonal
+        reclass_df.loc[~unk_idxs & clonal_idxs, "classification"] = "SOM_clonal"
+        reclass_df.loc[~unk_idxs & ~clonal_idxs, "classification"] = "SOM_private"
 
     # Peak is on different strands in different replicates
     reclass_df.loc[(reclass_df["strand"] == "+,-") |
@@ -234,9 +232,8 @@ def run_comparison(peaks, donor, comparison, num_samples, min_samples):
             raise ValueError("Must use file names")
     else:
         analysis_dfs, file_dfs = read_sample_peaks(peaks)
-        print(analysis_dfs[0])
+
         bedtools = [BedTool.from_dataframe(df) for df in analysis_dfs]
-        
         intvls = get_multiintvls(bedtools)
         peak_df = get_peaks_for_multiintvls(bedtools, intvls, donor)
         multi_df = filter_multiintvls(peak_df, min_samples)
