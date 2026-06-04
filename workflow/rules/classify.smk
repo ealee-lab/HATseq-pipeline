@@ -3,15 +3,16 @@ rule create_big_table:
 		peaks = "{sample}/{sample}_peaks.bed",
 		peak_readID_list = "{sample}/{sample}_peak_readID_list.txt",
 		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed",
-		chimera = "{sample}/{sample}_chimera.txt",
 		pass_gmotif_list = "{sample}/{sample}_pass_gmotif_list.txt",
-		Ntag_list = "{sample}/{sample}_Ntag_list.txt",
+		# Ntag_list = "{sample}/{sample}_Ntag_list.txt",
 		unique_start_positions = "{sample}/{sample}_unique_start_positions.bed",
 		nearby_peaks = "{sample}/{sample}_nearby_peaks.tsv",
-		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed",
+		satellite_intersect="{sample}/{sample}_satellite_intersect.bed",
+        segdup_intersect="{sample}/{sample}_segdup_intersect.bed",
+        homopolymer_intersect="{sample}/{sample}_homopolymer_intersect.bed",
 		max_depth = "{sample}/{sample}_max_depth_distance_to_boundary.txt",
 		polyT_reads = "{sample}/{sample}_polyT_reads.txt",
-		softclip3p_table = "{sample}/{sample}_softclip_3p.tsv"
+		endpoint3p_table = "{sample}/{sample}_endpoint_3p.tsv"
 	output:
 		big_table = "{sample}/{sample}_big_table.tsv"
 	resources:

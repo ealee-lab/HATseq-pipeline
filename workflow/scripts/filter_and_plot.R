@@ -28,13 +28,13 @@ canonical_chrs <- c(
 )
 
 big_table <- read.table(big_table_file, sep="\t", header=TRUE)
+
 colnames(big_table) <- c(
   "chrm","start","end","peak","shape","strand",
-  "reads","Ntag","gmotif","polyA","breakpoint","bp_chimera_len","bp_chimera_ratio",
-  "repeatmasker","evrony","satellites","i1kgp","gnomad","nyuwa",
-  "xtea","hgsvc3","melt_lra","ont","bamreads","peakreads","uniqreads",
-  "usp","unique_read_ratio","RPM","nearest_peak",
-  "SegDups","max_distance"
+  "reads","gmotif","polyA","breakpoint","max_distance","nearest_peak",
+  "satellites","SegDups","homopolymers","repeatmasker","evrony",
+  "i1kgp","gnomad","nyuwa","xtea","hgsvc3","melt_lra","ont",
+  "bamreads","peakreads","uniqreads","usp","RPM","unique_read_ratio"
 )
 
 # Define more columns
@@ -56,6 +56,10 @@ big_table$RPM_log <- log(big_table$RPM)
 big_table$number_templates <- as.numeric(
   unlist(lapply(strsplit(big_table$usp, ";"), `[[`, 1))
 )
+
+# big_table$max_dups <- lapply(strsplit(big_table$usp, ";"), `[[`, 2)
+# big_table$max_dups <- as.numeric(lapply(strsplit(unlist(big_table$max_dups), ","), `[[`, 1))
+
 big_table$TPM <- (big_table$number_templates / big_table$bamreads) * 1000000
 big_table$template_ratio <- NA
 template_list <- lapply(
@@ -108,6 +112,12 @@ cat(
 cat(
   paste0("Total peaks overlapping SegDups: ", 
     nrow(big_table[big_table$SegDups != '.',])), 
+  file=summary_file, 
+  sep="\n"
+)
+cat(
+  paste0("Total peaks overlapping homopolymers: ", 
+    nrow(big_table[big_table$homopolymers != '.',])), 
   file=summary_file, 
   sep="\n"
 )
@@ -186,16 +196,6 @@ big_table$filter_reason[big_table$classification == "Non-specific"] <- "Non-spec
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 cat("\n\tCandidate peaks", file=summary_file, sep="\n")
 
-# big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & 
-#                         ((big_table$bp_chimera_len > 12) | (big_table$bp_chimera_ratio >= 0.8))] <- "chimera"
-# big_table$FP[big_table$filter_reason == "chimera"] <- TRUE
-# cat(
-#   paste0("\t\tChimera: ", 
-#     nrow(big_table[big_table$filter_reason == "chimera",])), 
-#   file=summary_file, 
-#   sep="\n"
-# )
-
 if (library != "bulk") {
   # Require multi-template support for PTA libraries
   if (library == "single") {
@@ -204,7 +204,6 @@ if (library != "bulk") {
     big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
   }
 
-  # big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$number_templates < 2)] <- "templates"
   big_table$FP[big_table$filter_reason == "templates"] <- TRUE
   cat(
     paste0("\t\tToo few templates: ", 
@@ -213,14 +212,14 @@ if (library != "bulk") {
     sep="\n"
   )
 
-  # big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.25)] <- "template_ratio"
-  # big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
-  # cat(
-  #   paste0("\t\tTemplate ratio: ",
-  #     nrow(big_table[big_table$filter_reason == "template_ratio",])), 
-  #   file=summary_file, 
-  #   sep="\n"
-  # )
+  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.2)] <- "template_ratio"
+  big_table$FP[big_table$filter_reason == "template_ratio"] <- TRUE
+  cat(
+    paste0("\t\tTemplate ratio: ",
+      nrow(big_table[big_table$filter_reason == "template_ratio",])), 
+    file=summary_file, 
+    sep="\n"
+  )
 }
 
 big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$unique_read_ratio < 0.1)] <- "read_ratio"
@@ -273,16 +272,16 @@ cat(
   sep="\n"
 )
 
-if (library == "single") {
-  big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$peak_width < 150)] <- "peak_width"
-  big_table$FP[big_table$filter_reason == "peak_width"] <- TRUE
-  cat(
-    paste0("\t\tPeak width: ",
-      nrow(big_table[big_table$filter_reason == "peak_width",])), 
-    file=summary_file, 
-    sep="\n"
-  )
-}
+# if (library == "single") {
+#   big_table$filter_reason[(big_table$candidate) & !(big_table$FP) & (big_table$peak_width < 150)] <- "peak_width"
+#   big_table$FP[big_table$filter_reason == "peak_width"] <- TRUE
+#   cat(
+#     paste0("\t\tPeak width: ",
+#       nrow(big_table[big_table$filter_reason == "peak_width",])), 
+#     file=summary_file, 
+#     sep="\n"
+#   )
+# }
 
 big_table$classification[big_table$FP] <- "FP"
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE

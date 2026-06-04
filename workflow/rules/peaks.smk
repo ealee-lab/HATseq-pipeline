@@ -39,24 +39,6 @@ rule count_templates:
 	script:
 		"../scripts/count_templates.py"
 
-rule chimera:
-	input:
-		breakpoint_fa = "{sample}/{sample}_breakpoint.fa",
-	output:
-		chimera = "{sample}/{sample}_chimera.txt",
-	benchmark:
-		"benchmarks/run_chimera/{sample}.tsv"
-	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_min_mem_mb,
-	conda:
-		"../envs/HATseq.yml"
-	log:
-		"logs/chimera/{sample}.log"
-	group: "peaks"
-	script:
-		"../scripts/chimera.py"
-
 rule nearby_peak:
 	input:
 		peaks = "{sample}/{sample}_peaks.bed"
@@ -81,49 +63,55 @@ rule nearby_peak:
 					"print b[stop],$4 }}' "
 			"> {output.nearby_peaks} 2> {log} \n"
 
-rule segdup:
+
+rule intersect_regions:
 	input:
-		peaks = "{sample}/{sample}_peaks.bed",
-		segdups = f"{ref_dir}/SegDup/hg38.genomicSuperDups.v37.chr.bed"
+        peaks="{sample}/{sample}_peaks.bed",
+        satellites=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.Satellite.bed",
+        segdups=f"{ref_dir}/SegDup/hg38.genomicSuperDups.v37.chr.bed",
+        homopolymers=f"{ref_dir}/human/hg38.hg19.homo8.chr.bed"
 	output:
-		segdup_intersect = "{sample}/{sample}_segdup_intersect.bed"
+        satellite_intersect="{sample}/{sample}_satellite_intersect.bed",
+        segdup_intersect="{sample}/{sample}_segdup_intersect.bed",
+        homopolymer_intersect="{sample}/{sample}_homopolymer_intersect.bed"
 	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_min_mem_mb,
+        runtime=get_min_runtime,
+        mem_mb=get_min_mem_mb,
 	conda:
 		"../envs/HATseq.yml"
 	log:
-		"logs/segdup/{sample}.log"
-	group: "peaks"
-	shell:
-		"intersectBed -wao -a {input.peaks} -b {input.segdups} | "
-			"mergeBed -s -i stdin -c 4,10 -o distinct,collapse "
-			"> {output.segdup_intersect} 2> {log} \n"
+        "logs/intersect_regions/{sample}.log",
+    group:
+        "peaks"
+    script:
+        "../scripts/intersect_regions.sh"
+
 				
 rule intersect_databases:
 	input:
-		peaks = "{sample}/{sample}_peaks.bed",
-		hg38 = f"{ref_dir}/human/hg38.genome", 
-		Evrony_KR = f"{ref_dir}/RepeatMasker/hg38.Evrony_KR_960.liftover.bed",
-		repeat_masker = f"{ref_dir}/RepeatMasker/hg38.repeatmasker.L1.bed",
-		satellites = f"{ref_dir}/RepeatMasker/hg38.repeatmasker.Satellite.bed",
-		i1kgp = f"{ref_dir}/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed",
-		gnomad = f"{ref_dir}/gnomAD-SV/gnomad.v4.1.ME.sites.bed",
-		nyuwa = f"{ref_dir}/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed",
-		xtea = f"{ref_dir}/xTea/xTea_Borges-Monroy2021.accessioned.bed",
-		hgsvc3 = f"{ref_dir}/HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed",
-		melt_lra = f"{ref_dir}/HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed",
-		ont = f"{ref_dir}/1019_ONT/1019_ONT_Schloissnig2025.bed"
+        peaks="{sample}/{sample}_peaks.bed",
+        hg38=f"{ref_dir}/human/hg38.genome",
+        repeat_masker=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.L1.bed",
+        Evrony_KR=f"{ref_dir}/RepeatMasker/hg38.Evrony_KR_960.liftover.bed",
+        # satellites=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.Satellite.bed",
+        i1kgp=f"{ref_dir}/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed",
+        gnomad=f"{ref_dir}/gnomAD-SV/gnomad.v4.1.ME.sites.bed",
+        nyuwa=f"{ref_dir}/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed",
+        xtea=f"{ref_dir}/xTea/xTea_Borges-Monroy2021.accessioned.bed",
+        hgsvc3=f"{ref_dir}/HGSVC3/MEI_Callset_GRCh38.ALL.20241211.bed",
+        melt_lra=f"{ref_dir}/HGSVC3/Ortho_MEI_GRCh38.ALL.20241211.bed",
+        ont=f"{ref_dir}/1019_ONT/1019_ONT_Schloissnig2025.bed",
 	output:
-		intersect_annotated = "{sample}/{sample}_intersect_annotated.bed"
+        intersect_annotated="{sample}/{sample}_intersect_annotated.bed",
 	resources:
-		runtime = get_min_runtime,
-		mem_mb = get_intersect_databases_mem_mb
+        runtime=get_min_runtime,
+        mem_mb=get_intersect_databases_mem_mb,
 	conda:
 		"../envs/HATseq.yml"
 	log:
-		"logs/intersect_databases/{sample}.log"
-	group: "peaks"
+        "logs/intersect_databases/{sample}.log",
+    group:
+        "peaks"
 	script:
 		"../scripts/intersect_databases.sh"
 		
