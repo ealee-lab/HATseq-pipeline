@@ -3,7 +3,7 @@
 exec 2> "${snakemake_log[0]}"
 
 # Map mappable parts of R1 to reference genome
-bwa mem -t ${snakemake_params[cores]} -R $(echo ${snakemake_params[RG_ID]}) \
+bwa mem -t ${snakemake[threads]} -R $(echo ${snakemake_params[RG_ID]}) \
 	"${snakemake_input[ref_genome]}" \
 	"${snakemake_input[L1HS_trim_fromR1_fq1]}" | \
 	samtools view -Sb - \
@@ -12,7 +12,7 @@ bwa mem -t ${snakemake_params[cores]} -R $(echo ${snakemake_params[RG_ID]}) \
 samtools sort -o "${snakemake_output[bwa_sorted_bam]}" "${snakemake_output[bwa_bam]}" 
 samtools index "${snakemake_output[bwa_sorted_bam]}" 
 
-bwa mem -t ${snakemake_params[cores]} -R $(echo ${snakemake_params[RG_ID]}) \
+bwa mem -t ${snakemake[threads]} -R $(echo ${snakemake_params[RG_ID]}) \
 	"${snakemake_input[ref_genome]}" \
 	"${snakemake_input[L1HS_polyA_trim_fromR1_fq1]}" | \
 	samtools view -Sb - \

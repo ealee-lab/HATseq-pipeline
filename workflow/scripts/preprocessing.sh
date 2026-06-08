@@ -5,7 +5,7 @@ exec 2> "${snakemake_log[0]}"
 
 # Remove L1HS AC primer from R2 
 # Discard pairs if R2 does not contain sequence
-cutadapt -j ${snakemake_params[cores]} \
+cutadapt -j ${snakemake[threads]} \
 	-g "${snakemake_params[L1HS_primer]}" \
 	--discard-untrimmed -O 10 -e 0.08 \
 	-o "${snakemake_output[L1HS_primer_trim_fromR2_fq2]}" \
@@ -15,7 +15,7 @@ cutadapt -j ${snakemake_params[cores]} \
 	>> "${snakemake_output[cutadapt_report]}"
 
 # Make list of L1HS-derived read IDs
-cutadapt -j ${snakemake_params[cores]} \
+cutadapt -j ${snakemake[threads]} \
 	-g "^${snakemake_params[L1PA_young_seq]}" \
 	--discard-untrimmed -e 4 \
 	-o "${snakemake_output[L1_young_seq_trim_fromR2_fq2]}" \
@@ -33,7 +33,7 @@ seqtk subseq "${snakemake_output[L1HS_primer_trim_fromR2_fq1]}" \
 
 # Trim L1HS sequence from R1 if present
 # If present, cutadapt will also remove any tailing primer sequences
-cutadapt -j ${snakemake_params[cores]} \
+cutadapt -j ${snakemake[threads]} \
 	-m ${snakemake_params[min_len]} \
 	-a "${snakemake_params[L1HSseq]}" \
 	-O 20 -e 0.08 \
@@ -42,7 +42,7 @@ cutadapt -j ${snakemake_params[cores]} \
 	>> "${snakemake_output[cutadapt_report]}"
 
 # Trim polyA tail from R1 if present
-cutadapt -j ${snakemake_params[cores]} \
+cutadapt -j ${snakemake[threads]} \
 	-m ${snakemake_params[min_len]} \
 	-a "${snakemake_params[adapter_T]}" \
 	-O 6 -e 0 \
