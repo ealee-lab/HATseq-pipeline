@@ -38,11 +38,8 @@ endpoints = pd.read_table(
 peaks = peaks.merge(endpoints, how="left", on=["read","chr","strand"]).fillna(".")
 del endpoints
 
-# Modify rows where clipped read is incorrectly matched to peak
-outside_ends = ((peaks["endpoint"] < peaks["start"]) | (peaks["endpoint"] > peaks["end"]))
-peaks.loc[outside_ends, "clip_seq"] = "."
-peaks.loc[outside_ends & (peaks["strand"] == "+"), "endpoint"] = peaks["end"]
-peaks.loc[outside_ends & (peaks["strand"] == "-"), "endpoint"] = peaks["start"]
+# Delete rows where clipped read is incorrectly matched to peak
+peaks = peaks[(peaks["endpoint"] >= peaks["start"]) & (peaks["endpoint"] <= peaks["end"])]
 
 polyA = pd.read_table(
 	snakemake.input.polyT_reads, sep="\t", header=None, 
