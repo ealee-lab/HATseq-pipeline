@@ -38,8 +38,11 @@ endpoints = pd.read_table(
 peaks = peaks.merge(endpoints, how="left", on=["read","chr","strand"]).fillna(".")
 del endpoints
 
-# Remove rows where clipped read is incorrectly matched to peak
-peaks = peaks[(peaks["endpoint"] >= peaks["start"]) & (peaks["endpoint"] <= peaks["end"])]
+# Modify rows where clipped read is incorrectly matched to peak
+outside_ends = ((peaks["endpoint"] < peaks["start"]) | (peaks["endpoint"] > peaks["end"]))
+peaks.loc[outside_ends, "clip_seq"] = "."
+peaks.loc[outside_ends & (peaks["strand"] == "+"), "endpoint"] = peaks["end"]
+peaks.loc[outside_ends & (peaks["strand"] == "-"), "endpoint"] = peaks["start"]
 
 polyA = pd.read_table(
 	snakemake.input.polyT_reads, sep="\t", header=None, 
@@ -79,7 +82,6 @@ big_table = peaks.groupby(["chr","start","end","peak_name","shape","strand"]).ag
 	'bp_dist': lambda x: calculate_breakpoint_concordance(x)
 }).reset_index()
 del peaks
-
 
 max_depth_distance = pd.read_table(snakemake.input.max_depth,sep="\t", 
 								   header=None, names=['peak_name','distance'])
