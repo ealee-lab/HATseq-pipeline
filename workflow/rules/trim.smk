@@ -11,7 +11,8 @@ rule qc:
 		illumina_adapter=config["illumina_adapter"],
 		len_req=50,
 		report_path=lambda wc: f"{wc.sample}/reports",
-	threads: 4
+		cores=lambda wc, threads: threads * 2,
+	threads: 2
 	resources:
 		runtime=get_qc_runtime,
 		mem_mb=get_qc_mem_mb,
@@ -21,12 +22,12 @@ rule qc:
 		"logs/qc/{sample}.log",
 	shell:
 		"mkdir -p {params.report_path} \n"
-		"fastqc -t {threads} --noextract --nogroup "
+		"fastqc -t {params.cores} --noextract --nogroup "
 			"-o {params.report_path} "
 			"{input.raw_fq1} {input.raw_fq2} " # Run fastqc
 			"2> {log} \n"
 
-		"fastp -w {threads} -a {params.illumina_adapter} --length_required={params.len_req} "
+		"fastp -w {params.cores} -a {params.illumina_adapter} --length_required={params.len_req} "
 			"-i {input.raw_fq1} -I {input.raw_fq2} "
 			"-o {output.illumina_adapter_trim_fq1} -O {output.illumina_adapter_trim_fq2} "
 			"-h {output.fastp_html_report} "
@@ -52,7 +53,8 @@ rule preprocessing:
 		L1PA_young_seq="GTTAGTGGGTGCAGCGCACCAGCATGGCACATGTATACATATGTAACTAACCTGCACAATGTGCACATGTACCCTAAAACTTAGAGT",
 		L1HSseq="ATTATACTCTAAGTTTTAGGGTACATGTGCACATTGTGCAGGTTAGTTACATATGTATACATGTGCCATGCTGGTGCGCTGCACCCACTAATGTGTCATCTAGCATTAGGTATATCTCCC",
 		adapter_T="TTTTTTTT",
-	threads: 4
+		cores=lambda wc, threads: threads * 2,
+	threads: 2
 	resources:
 		runtime=get_preprocessing_runtime,
 		mem_mb=get_preprocessing_mem_mb,

@@ -11,8 +11,8 @@ fp=$(grep -E 'UNK|SOM' "${peak_file}" | \
     awk -v FS='\t' '{if ($NF == "-NA-") print $4}' | wc -l)
 
 # Number of true peaks found (i.e. number of peaks that overlap with GTS)
-	# Don't re-count if 1 true peak overlaps >1 called peaks
-	# Don't re-count if 1 called peak overlaps >1 true peaks
+# Don't re-count if 1 true peak overlaps >1 called peaks
+# Don't re-count if 1 called peak overlaps >1 true peaks
 tp=$(awk -v FS='\t' '{print $4}' "${true_peaks}" | \
     grep -w -f - "${peak_file}" | \
     grep -E 'UNK|SOM' | \

@@ -92,6 +92,9 @@ def get_extract_clipping_mem_mb(wildcards, input, attempt):
 	mb = min(10 * input.size_mb, 100) * (2 ** (attempt - 1))
 	return mb
 
+def get_extract_endpoints_mem_mb(wildcards, input, attempt):
+	mb = 300 * (2 ** (attempt - 1))
+	return mb
 
 def get_peak_calling_mem_mb(wildcards, attempt):
 	mb = 4000 * (2 ** (attempt - 1))

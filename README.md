@@ -72,7 +72,7 @@ For a more permanent solution, users should locate the corresponding rule and re
 Lastly, users can override the resource requirements set in `common.smk` by adding the options `--default-resources RESOURCE=VALUE` or `--set-resources RULE:RESOURCE=VALUE` (for specific rules) to the running command in `run_HATseq-pipeline.sh`.
 
 # Changelog #
-**v0.4.0** Jun 10 2026
+**v0.4.0** Jun 19 2026
 - Add constraints to library parameter in schema
 - Remove Ntag rule
 - Merge peaks within 10bp for bulk samples, keep separate for PTA samples
