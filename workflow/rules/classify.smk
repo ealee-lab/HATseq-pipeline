@@ -70,6 +70,7 @@ rule multi_sample_classification:
 	output:
 		donor_peaks="all_{donor}_classified_peaks.bed",
 		multi_peaks="{donor}_multi_peaks.bed",
+		knr_peaks="{donor}_KNR_peaks.bed"
 	params:
 		num_samples=lambda wc, input: len(input.sample_peaks),
 		comparison=get_comparison_string,
@@ -83,10 +84,40 @@ rule multi_sample_classification:
 	group:
 		"classify"
 	shell:
-		"python {workflow.basedir}/scripts/multi_classify.py "
-			"-d {wildcards.donor} "
-			"-f {input.sample_peaks} "
-			"-p {output.donor_peaks} "
-			"-m {output.multi_peaks} "
-			"-c {params.comparison} "
-			"2> {log}"
+		"""
+		if [[ {params.num_samples} -lt 2 ]]; then
+			cat {input.sample_peaks} > {output.donor_peaks}
+			touch {output.multi_peaks}
+		else
+			python {workflow.basedir}/scripts/multi_classify.py \
+				-d {wildcards.donor} \
+				-f {input.sample_peaks} \
+				-p {output.donor_peaks} \
+				-m {output.multi_peaks} \
+				-k {output.knr_peaks} \
+				-c {params.comparison} \
+				-l {log}
+		fi
+		"""
+
+rule multi_donor_classification:
+	input:
+		donor_peaks=expand("all_{donor}_classified_peaks.bed", donor=samples["donor"].unique())
+	output:
+		putative_peaks="all_putative_peaks.bed"
+	params:
+		num_donors=lambda wc, input: len(input.donor_peaks),
+	resources:
+		runtime=5,
+		mem_mb=8000,
+	conda:
+		"../envs/HATseq.yml"
+	shell:
+		"""
+		if [[ {params.num_donors} -lt 2 ]]; then
+			cat {input.donor_peaks} | grep "PASS" > {output.putative_peaks}
+		else 
+			python {workflow.basedir}/scripts/compare_donors.py \
+				-f {input.donor_peaks} -o {output.putative_peaks}
+		fi
+		"""

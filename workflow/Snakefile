@@ -8,16 +8,8 @@ from snakemake.utils import validate, min_version
 # Check version
 min_version("7.32.0")
 
-
 # Load rules
 include: "rules/common.smk"  # helper code
-include: "rules/trim.smk"
-include: "rules/align.smk"
-include: "rules/seq_features.smk"
-include: "rules/peaks.smk"
-include: "rules/classify.smk"
-include: "rules/transduction.smk"
-
 
 # Read metadata - this is a global variable
 samples = pd.read_csv(config["metadata"], sep="\t", dtype=str)
@@ -39,6 +31,12 @@ samples = samples.set_index("sample_name", drop=False)
 
 # ref_dir = config["reference_dir"]
 
+include: "rules/trim.smk"
+include: "rules/align.smk"
+include: "rules/seq_features.smk"
+include: "rules/peaks.smk"
+include: "rules/classify.smk"
+include: "rules/transduction.smk"
 
 localrules:
     HATseq,
@@ -48,19 +46,11 @@ rule HATseq:
     input:
         expand(
             [
-                "{sample}/{sample}_peak_sorted_bwa.bam",
-                # "{sample}/{sample}_Ntag_list.txt",
-                "{sample}/{sample}_pass_gmotif_list.txt",
-                "{sample}/{sample}_polyT_reads.txt",
-                "{sample}/{sample}_peaks.bed",
-                "{sample}/{sample}_unique_start_positions.bed",
-                "{sample}/{sample}_intersect_annotated.bed",
-                "{sample}/{sample}_big_table.tsv",
                 "{sample}/{sample}_classified_peaks.bed",
-                "{sample}/{sample}_custom_transduction.fasta",
-                "{sample}/{sample}_transduction_plots.pdf",
+                "{sample}/{sample}_filtered_transduction.tsv",
                 "{donor}_multi_peaks.bed",
             ],
             sample=samples.index,
             donor=samples["donor"].unique(),
         ),
+        "all_putative_peaks.bed"
