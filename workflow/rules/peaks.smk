@@ -46,6 +46,26 @@ rule count_templates:
 		"../scripts/count_templates.py"
 
 
+rule find_breakends:
+	input:
+		peaks="{sample}/{sample}_peaks.bed",
+		peak_readID_list="{sample}/{sample}_peak_readID_list.txt",
+		softclip3p_table="{sample}/{sample}_softclip_3p.tsv"
+	output:
+		breakends="{sample}/{sample}_breakends.bed",
+	resources:
+		runtime=10,
+		mem_mb=12000,
+	conda:
+		"../envs/HATseq.yml"
+	log:
+		"logs/find_breakends/{sample}.log",
+	group:
+		"peaks"
+	script:
+		"../scripts/find_breakends.py"
+
+
 rule nearby_peak:
 	input:
 		peaks="{sample}/{sample}_peaks.bed",
@@ -73,6 +93,7 @@ rule nearby_peak:
 rule intersect_regions:
 	input:
 		peaks="{sample}/{sample}_peaks.bed",
+		breakends="{sample}/{sample}_breakends.bed",
 		satellites=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.Satellite.bed",
 		segdups=f"{ref_dir}/SegDup/hg38.genomicSuperDups.v37.chr.bed",
 		homopolymers=f"{ref_dir}/human/hg38.hg19.homo8.chr.bed",
@@ -95,11 +116,10 @@ rule intersect_regions:
 
 rule intersect_databases:
 	input:
-		peaks="{sample}/{sample}_peaks.bed",
-		hg38=f"{ref_dir}/human/hg38.genome",
+		breakends="{sample}/{sample}_breakends.bed",
+		hg38=f"{ref_dir}/human/hg38.sorted.genome",
 		repeat_masker=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.L1.bed",
 		Evrony_KR=f"{ref_dir}/RepeatMasker/hg38.Evrony_KR_960.liftover.bed",
-		# satellites=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.Satellite.bed",
 		i1kgp=f"{ref_dir}/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed",
 		gnomad=f"{ref_dir}/gnomAD-SV/gnomad.v4.1.ME.sites.bed",
 		nyuwa=f"{ref_dir}/nyuwa/MEI.GRCh38.HMEIDv1.1.final.bed",

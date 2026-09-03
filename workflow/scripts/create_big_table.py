@@ -93,12 +93,12 @@ big_table = big_table.merge(nearby_peak, how="left", on="peak_name").fillna(".")
 del nearby_peak
 
 satellites = pd.read_table(snakemake.input.satellite_intersect, sep="\t", 
-						   names=['peak_name','Satellite'])
+						   names=['peak_name','satellite'])
 big_table = big_table.merge(satellites, how="left", on="peak_name").fillna(".")
 del satellites
 
 segdups = pd.read_table(snakemake.input.segdup_intersect, sep="\t", 
-						names=['peak_name','SegDup'])
+						names=['peak_name','segdup'])
 big_table = big_table.merge(segdups, how="left", on="peak_name").fillna(".")
 del segdups
 
@@ -107,20 +107,16 @@ homopolymers = pd.read_table(snakemake.input.homopolymer_intersect, sep="\t",
 big_table = big_table.merge(homopolymers, how="left", on="peak_name").fillna(".")
 del homopolymers
 
-intersect = pd.read_table(snakemake.input.intersect_annotated, sep="\t", header=0)
+intersect = pd.read_table(snakemake.input.intersect_annotated, sep="\t", header=0).fillna(".")
 big_table = big_table.merge(
-	intersect[['peak_name','RepeatMasker','Evrony_KR',
-			   '1000_Genomes_Project','gnomAD','NyuWa','xTea',
-			   'HGSVC3','HGSVC3-MELT-LRA','1019_ONT']], 
+	intersect[['peak_name','nearest_KR','nearest_KNR']], 
 	how="left", on="peak_name")
 del intersect
 
-usp = pd.read_table(snakemake.input.unique_start_positions, sep="\t", header=0)
-usp.columns = usp.columns.str.strip("#")
-usp["RPM"] = (usp['num_peak_reads'] / (usp['num_bam_reads'])) * 1000000
-usp["unique_read_ratio"] = usp["num_peak_unique_reads"] / usp["num_peak_reads"]
-big_table = big_table.merge(usp, how="left", on="peak_name")
-del usp
+big_table["nearest_KR_dist"] = big_table["nearest_KR"].str.split(",").str[0].str.split(";").str[1]
+big_table.loc[big_table["nearest_KR"] == ".", "nearest_KR_dist"] = 999
+big_table["nearest_KNR_dist"] = big_table["nearest_KNR"].str.split(",").str[0].str.split(";").str[1]
+big_table.loc[big_table["nearest_KNR"] == ".", "nearest_KNR_dist"] = 999
 
 big_table = big_table.replace(r',{2,}', '', regex=True)
 big_table.to_csv(snakemake.output.big_table, sep="\t", index=False, header=True, na_rep="")
