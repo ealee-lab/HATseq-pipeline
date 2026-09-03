@@ -29,3 +29,21 @@ rule alignment:
 		"align"
 	script:
 		"../scripts/alignment.sh"
+
+
+rule get_unique_reads:
+	input:
+		trim_uniq_sorted_bam="{sample}/{sample}_trim_uniq_sorted.bam",
+	output:
+		uniq_readID_list="{sample}/{sample}_unique_readID_list.txt"
+	resources:
+		runtime=get_min_runtime,
+		mem_mb=get_min_mem_mb,
+	conda:
+		"../envs/HATseq.yml"
+	log:
+		"logs/get_unique_reads/{sample}.log",
+	group:
+		"align"
+	shell:
+		"samtools view {input.trim_uniq_sorted_bam} | awk '{{print $1}}' > {output.uniq_readID_list}"

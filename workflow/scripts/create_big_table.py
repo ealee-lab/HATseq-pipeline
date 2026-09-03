@@ -1,96 +1,91 @@
+import sys
 import pandas as pd
-import statistics
+import numpy as np
 
-
-def calculate_breakpoint_concordance(x):
-	bps = [int(y) for y in x if y >= 0]
-
-	if len(bps) > 0:
-		bp_near = [d for d in bps if d <= 8]
-		bp_pct = len(bp_near) / len(bps)
-	else:
-		bp_pct = -1
-	return bp_pct
-
+sys.stderr = open(snakemake.log[0], "w", buffering=1)
 
 peaks = pd.read_table(
 	snakemake.input.peaks, sep="\t", skiprows=1, header=None, 
-	names=["chr","start","end","peak_name","shape","strand"])
+	names=["chrm","start","end","peak_name","shape","strand"])
+peaks = peaks.astype(
+	{"chrm": str, "start": int, "end": int, "peak_name": str, "shape": str, "strand": str})
 
 readIDs = pd.read_table(
 	snakemake.input.peak_readID_list, sep="\t", header=None, names=["peak_name","read"])
 peaks = peaks.merge(readIDs, how="left", on="peak_name")
 del readIDs
 
-# Ntag = pd.read_table(snakemake.input.Ntag_list, sep="\t", 
-# 					 header=None, names=["read","Ntag"])
-# peaks = peaks.merge(Ntag, how="left", on="read").fillna("")
-# del Ntag
+num_bam_reads = len(peaks)
 
 gmotif = pd.read_table(snakemake.input.pass_gmotif_list, sep="\t", header=None, names=["read"])
 gmotif["gmotif"] = "pass_" + gmotif["read"]
 peaks = peaks.merge(gmotif, how="left", on="read").fillna("fail")
 del gmotif
 
-endpoints = pd.read_table(
-	snakemake.input.endpoint3p_table, sep="\t", header=None, 
-	names=["read","chr","endpoint","strand","clip_seq"])
-peaks = peaks.merge(endpoints, how="left", on=["read","chr","strand"]).fillna(".")
-del endpoints
-
-# Delete rows where clipped read is incorrectly matched to peak
-peaks = peaks[(peaks["endpoint"] >= peaks["start"]) & (peaks["endpoint"] <= peaks["end"])]
-
-polyA = pd.read_table(
-	snakemake.input.polyT_reads, sep="\t", header=None, 
-	usecols=[0,1,2,3], names=["read","chr","endpoint","strand"])
+polyA = pd.read_table(snakemake.input.polyT_reads, sep="\t", header=None,
+					  usecols=[0,1,2,3], names=["read","chrm","clippoint","strand"])
+uniq = pd.read_table(snakemake.input.uniq_readID_list, sep="\t", header=None, names=["read"])
+polyA = polyA.merge(uniq, how="inner", on="read")
 polyA["polyA"] = "pass_" + polyA['read']
-peaks = peaks.merge(polyA, how="left", on=["read","chr","endpoint","strand"]).fillna("fail")
+peaks = peaks.merge(polyA, how="left", on=["read","chrm","strand"])
 del polyA
 
-breakpoints = peaks[peaks["polyA"] != "fail"].groupby("peak_name").agg(
-	breakpoint=('endpoint', lambda x: statistics.mode(x))
+peaks["polyA"].fillna("fail", inplace=True)
+peaks.loc[peaks["clippoint"].isna(), "clippoint"] = peaks["end"] # arbitrary for reads without clip
+peaks["clippoint"] = peaks["clippoint"].astype(int)
+
+# Delete rows where polyA read is incorrectly matched to peak
+peaks = peaks[(peaks["clippoint"] >= peaks["start"]) & (peaks["clippoint"] <= peaks["end"])]
+
+big_table = peaks.groupby(["chrm","start","end","peak_name","shape","strand"]).agg(
+	num_reads=('read', lambda x: len(list(set(x)))),
+	num_gmotif_reads=('gmotif', lambda x: len(list(set([y for y in x if y != "fail"])))),
+	num_polyA_reads=('polyA', lambda x: len(list(set([y for y in x if y != "fail"]))))
+	# 'bp_dist': lambda x: calculate_breakpoint_concordance(x)
 ).reset_index()
-peaks = peaks.merge(breakpoints, how="left", on="peak_name").fillna(-1)
-
-# Calculate distance from breakpoint for select set of reads
-peaks["bp_dist"] = -1
-
-# Distance for all clipped reads
-peaks.loc[
-	(peaks["breakpoint"] > 0) &
-	(peaks["clip_seq"] != "."), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
-
-# Distance for all reads extending past the breakpoint
-peaks.loc[
-	(peaks["breakpoint"] > 0) & 
-	(peaks["endpoint"] >= peaks["breakpoint"]) &
-	(peaks["strand"] == "+"), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
-peaks.loc[
-	(peaks["breakpoint"] > 0) & 
-	(peaks["endpoint"] <= peaks["breakpoint"]) &
-	(peaks["strand"] == "-"), "bp_dist"] = abs(peaks["endpoint"] - peaks["breakpoint"])
-
-big_table = peaks.groupby(["chr","start","end","peak_name","shape","strand"]).agg({
-	'read': lambda x: len(list(set(x))),
-	# 'Ntag': lambda x: ",".join([y for y in list(set(x)) if (len(y) == 2 or len(y) == 4 or len(y) == 6)]),
-	'gmotif': lambda x: len(list(set([y for y in x if y != "fail"]))),
-	'polyA': lambda x: len(list(set([y for y in x if y != "fail"]))),
-	'bp_dist': lambda x: calculate_breakpoint_concordance(x)
-}).reset_index()
 del peaks
 
-max_depth_distance = pd.read_table(snakemake.input.max_depth,sep="\t", 
-								   header=None, names=['peak_name','distance'])
-big_table = big_table.merge(max_depth_distance, how="left", on="peak_name")
-del max_depth_distance
+big_table["peak_width"] = big_table["end"] - big_table["start"]
+big_table["gmotif_percent"] = (big_table["num_gmotif_reads"] / big_table["num_reads"]) * 100
+big_table["polyA_percent"] = (big_table["num_polyA_reads"] / big_table["num_reads"]) * 100
 
-nearby_peak = pd.read_table(snakemake.input.nearby_peaks, sep="\t", 
-							names=['nearest_peak','peak_name'])
+usp = pd.read_table(snakemake.input.unique_start_positions, sep="\t", header=0)
+usp.columns = usp.columns.str.strip("#")
+big_table = big_table.merge(usp, how="left", on="peak_name")
+del usp
+
+big_table["num_templates"] = big_table["num_usp;depth"].str.split(";").str[0].astype(int)
+big_table["num_endpoints"] = big_table["num_uep;depth"].str.split(";").str[0].astype(int)
+
+template1 = big_table["num_usp;depth"].str.split(";").str[1].str.split(",").str[0]
+template2 = big_table["num_usp;depth"].str.split(";").str[1].str.split(",").str[1]
+template2.loc[template2.isna()] = template1 # template_ratio = 1 if only 1 template
+big_table["template_ratio"] = template2.astype(int) / template1.astype(int)
+
+big_table["start_end_ratio"] = big_table["num_templates"] / big_table["num_endpoints"]
+big_table["unique_read_ratio"] = big_table["num_unique_reads"] / big_table["num_reads"]
+big_table["RPM"] = (big_table["num_reads"] / num_bam_reads) * 1000000
+big_table["TPM"] = (big_table["num_templates"] / num_bam_reads) * 1000000
+
+big_table.drop(columns=["num_usp;depth","num_uep;depth"], inplace=True)
+
+# max_depth_distance = pd.read_table(snakemake.input.max_depth,sep="\t", 
+# 								   header=None, names=['peak_name','distance'])
+# big_table = big_table.merge(max_depth_distance, how="left", on="peak_name")
+# del max_depth_distance
+
+nearby_peak = pd.read_table(
+	snakemake.input.nearby_peaks, sep="\t", names=['nearest_peak','peak_name'])
 nearby_peak['peak_name'] = nearby_peak['peak_name'].str.split(pat="=")
 nearby_peak = nearby_peak.explode('peak_name')
 big_table = big_table.merge(nearby_peak, how="left", on="peak_name").fillna(".")
 del nearby_peak
+
+big_table = big_table.merge(big_table[['peak_name','RPM']], how="left", 
+							left_on="nearest_peak", right_on="peak_name", suffixes=("", "_nearest"))
+big_table["nearest_RPM_ratio"] = big_table["RPM"] / big_table["RPM_nearest"]
+big_table["nearest_RPM_ratio"].fillna(1, inplace=True)
+big_table.drop(columns="peak_name_nearest", inplace=True)
 
 satellites = pd.read_table(snakemake.input.satellite_intersect, sep="\t", 
 						   names=['peak_name','satellite'])
@@ -119,4 +114,4 @@ big_table["nearest_KNR_dist"] = big_table["nearest_KNR"].str.split(",").str[0].s
 big_table.loc[big_table["nearest_KNR"] == ".", "nearest_KNR_dist"] = 999
 
 big_table = big_table.replace(r',{2,}', '', regex=True)
-big_table.to_csv(snakemake.output.big_table, sep="\t", index=False, header=True, na_rep="")
+big_table.to_csv(snakemake.output.big_table, sep="\t", index=False, header=True, na_rep=".")

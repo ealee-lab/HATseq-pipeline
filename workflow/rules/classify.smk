@@ -2,17 +2,16 @@ rule create_big_table:
 	input:
 		peaks="{sample}/{sample}_peaks.bed",
 		peak_readID_list="{sample}/{sample}_peak_readID_list.txt",
+		uniq_readID_list="{sample}/{sample}_unique_readID_list.txt",
 		intersect_annotated="{sample}/{sample}_intersect_annotated.bed",
 		pass_gmotif_list="{sample}/{sample}_pass_gmotif_list.txt",
-		# Ntag_list = "{sample}/{sample}_Ntag_list.txt",
-		unique_start_positions="{sample}/{sample}_unique_start_positions.bed",
+		unique_start_positions="{sample}/{sample}_unique_start_positions.tsv",
 		nearby_peaks="{sample}/{sample}_nearby_peaks.tsv",
 		satellite_intersect="{sample}/{sample}_satellite_intersect.bed",
 		segdup_intersect="{sample}/{sample}_segdup_intersect.bed",
 		homopolymer_intersect="{sample}/{sample}_homopolymer_intersect.bed",
 		max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
 		polyT_reads="{sample}/{sample}_polyT_reads.txt",
-		endpoint3p_table="{sample}/{sample}_endpoint_3p.tsv",
 	output:
 		big_table="{sample}/{sample}_big_table.tsv",
 	resources:
