@@ -8,16 +8,16 @@ rule peak_calling:
 		hg38=f"{ref_dir}/human/hg38.genome",
 	output:
 		peaks="{sample}/{sample}_peaks.bed",
-		max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
-		# breakpoint_fa=temp("{sample}/{sample}_breakpoint.fa"),
+		# peak_readID_list="{sample}/{sample}_peak_readID_list.txt",
 		peak_seq="{sample}/{sample}_peak_sequence.fa",
+		# max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
 	params:
 		library=config["library"],
 	resources:
 		runtime=get_peak_calling_runtime,
 		mem_mb=get_peak_calling_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/samtools.yml"
 	log:
 		"logs/peak_calling/{sample}.log",
 	group:
@@ -26,13 +26,31 @@ rule peak_calling:
 		"../scripts/peak_calling.sh"
 
 
-rule count_templates:
+rule match_peak_reads:
 	input:
 		peak_sorted_bam="{sample}/{sample}_peak_sorted_bwa.bam",
 		peaks="{sample}/{sample}_peaks.bed",
 	output:
-		unique_start_positions="{sample}/{sample}_unique_start_positions.bed",
 		peak_readID_list="{sample}/{sample}_peak_readID_list.txt",
+	resources:
+		runtime=get_peak_calling_runtime,
+		mem_mb=get_peak_calling_mem_mb,
+	conda:
+		"../envs/HATseq.yml"
+	log:
+		"logs/match_peak_reads/{sample}.log",
+	group:
+		"peaks"
+	script:
+		"../scripts/match_peak_reads.py"
+
+
+rule count_templates:
+	input:
+		trim_uniq_sorted_bam="{sample}/{sample}_trim_uniq_sorted.bam",
+		peaks="{sample}/{sample}_peaks.bed",
+	output:
+		unique_start_positions="{sample}/{sample}_unique_start_positions.tsv",
 	resources:
 		runtime=get_count_templates_runtime,
 		mem_mb=get_count_templates_mem_mb,

@@ -9,9 +9,10 @@ rule alignment:
 		bwa_sorted_index="{sample}/{sample}_bwa_sorted.bam.bai",
 		trim_bwa_bam=temp("{sample}/{sample}_trim_bwa.bam"),
 		trim_uniq_bam=temp("{sample}/{sample}_trim_uniq.bam"),
-		trim_uniq_sorted_bam=temp("{sample}/{sample}_trim_uniq_sorted.bam"),
-		trim_uniq_sorted_index=temp("{sample}/{sample}_trim_uniq_sorted.bam.bai"),
+		trim_uniq_sorted_bam="{sample}/{sample}_trim_uniq_sorted.bam",
+		trim_uniq_sorted_index="{sample}/{sample}_trim_uniq_sorted.bam.bai",
 		trim_peaks="{sample}/{sample}_trim_peaks.bed",
+		peak_bam=temp("{sample}/{sample}_peak_bwa.bam"),
 		peak_sorted_bam="{sample}/{sample}_peak_sorted_bwa.bam",
 		peak_sorted_index="{sample}/{sample}_peak_sorted_bwa.bam.bai",
 	params:
@@ -21,8 +22,10 @@ rule alignment:
 		runtime=get_alignment_runtime,
 		mem_mb=get_alignment_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/samtools.yml"
 	log:
 		"logs/alignment/{sample}.log",
+	group:
+		"align"
 	script:
 		"../scripts/alignment.sh"
