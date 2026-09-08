@@ -26,7 +26,7 @@ source $CONDA_BASE/etc/profile.d/conda.sh
 if conda env list | grep -E "^HATseq\b"; then
     conda activate HATseq
 else
-    conda env create --file envs/conda.yml --yes
+    conda env create --file envs/HATseq.yml --yes
     conda activate HATseq
 fi
 
