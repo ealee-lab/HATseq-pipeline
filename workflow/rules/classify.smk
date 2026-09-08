@@ -6,7 +6,7 @@ rule create_big_table:
 		intersect_annotated="{sample}/{sample}_intersect_annotated.bed",
 		pass_gmotif_list="{sample}/{sample}_pass_gmotif_list.txt",
 		unique_start_positions="{sample}/{sample}_unique_start_positions.tsv",
-		nearby_peaks="{sample}/{sample}_nearby_peaks.tsv",
+		nearby_peaks="{sample}/{sample}_nearby_peaks.txt",
 		satellite_intersect="{sample}/{sample}_satellite_intersect.bed",
 		segdup_intersect="{sample}/{sample}_segdup_intersect.bed",
 		homopolymer_intersect="{sample}/{sample}_homopolymer_intersect.bed",
@@ -51,17 +51,19 @@ rule filter_and_classify:
 	group:
 		"classify"
 	shell:
-		"Rscript {workflow.basedir}/scripts/filter_and_plot.R "
-			"{input.big_table} {output.filter_reasons} "
-			"{params.library} {output.plots} "
-			"{output.classified_peaks} {output.summary_file} "
-			"{params.error_prone} {params.truth_set} "
-			"2> {log} \n"
+		"""
+		Rscript {workflow.basedir}/scripts/filter_and_plot.R \
+			{input.big_table} {output.filter_reasons} \
+			{params.library} {output.plots} \
+			{output.classified_peaks} {output.summary_file} \
+			{params.error_prone} {params.truth_set} \
+			2> {log}
 
-		"grep -E 'UNK|SOM' {output.classified_peaks} | "
-			"awk -v OFS='\t' '{{print $1,$2,$3,$4}}' | "
-			"bedToIgv -name -slop 200 -path {params.path} -i stdin "
-			"> {output.igv_script} 2>> {log}"
+		grep -E 'UNK|SOM' {output.classified_peaks} | \
+			awk -v OFS='\t' '{{print $1,$2,$3,$4}}' | \
+			bedToIgv -name -slop 200 -path {params.path} -i stdin \
+			> {output.igv_script} 2>> {log}
+		"""
 
 
 rule multi_sample_classification:

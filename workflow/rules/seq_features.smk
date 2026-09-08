@@ -12,11 +12,13 @@ rule gmotif:
 	log:
 		"logs/gmotif/{sample}.log",
 	shell:
-		"seqtk subseq {input.L1HS_primer_trim_fromR2_fq2} {input.young_L1_readID_list} | "
-			"seqtk seq -a - | "
-			"grep 'CTTAGAGT' -B 1 | "
-			"seqkit seq -i -n - | sort | uniq "
-			"> {output.pass_gmotif_list} 2> {log}"
+		"""
+		seqtk subseq {input.L1HS_primer_trim_fromR2_fq2} {input.young_L1_readID_list} | \
+			seqtk seq -a - | \
+			grep 'CTTAGAGT' -B 1 | \
+			seqkit seq -i -n - | sort | uniq \
+			> {output.pass_gmotif_list} 2> {log}
+		"""
 
 
 rule extract_clipping:
@@ -69,7 +71,9 @@ rule junction_spanning:
 	log:
 		"logs/junction_spanning/{sample}.log",
 	shell:
-		"cat {input.softclip3p_table} | "
-			"awk -v OFS='\t' "
-			"'{{if(substr($5,1,30) ~ \"{params.adapter_T}\") print $1,$2,$3,$4,substr($5,1,30)}}' "
-			"> {output.polyT_reads} 2> {log}"
+		"""
+		cat {input.softclip3p_table} | \
+			awk -v OFS='\t' \
+			'{{if(substr($5,1,30) ~ "{params.adapter_T}") print $1,$2,$3,$4,substr($5,1,30)}}' \
+			> {output.polyT_reads} 2> {log}
+		"""

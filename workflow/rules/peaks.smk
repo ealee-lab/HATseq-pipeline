@@ -5,10 +5,9 @@ rule peak_calling:
 	input:
 		peak_sorted_bam="{sample}/{sample}_peak_sorted_bwa.bam",
 		ref_genome=config["bwa_ref_genome"],
-		hg38=f"{ref_dir}/human/hg38.genome",
+		hg38=f"{ref_dir}/human/hg38.sorted.genome",
 	output:
 		peaks="{sample}/{sample}_peaks.bed",
-		# peak_readID_list="{sample}/{sample}_peak_readID_list.txt",
 		peak_seq="{sample}/{sample}_peak_sequence.fa",
 		# max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
 	params:
@@ -87,8 +86,9 @@ rule find_breakends:
 rule nearby_peak:
 	input:
 		peaks="{sample}/{sample}_peaks.bed",
+		hg38=f"{ref_dir}/human/hg38.sorted.genome",
 	output:
-		nearby_peaks="{sample}/{sample}_nearby_peaks.tsv",
+		nearby_peaks="{sample}/{sample}_nearby_peaks.txt",
 	resources:
 		runtime=get_min_runtime,
 		mem_mb=get_min_mem_mb,
@@ -99,13 +99,20 @@ rule nearby_peak:
 	group:
 		"peaks"
 	shell:
-		'mergeBed -d 1000 -i {input.peaks} -c 4,5 -o collapse,collapse -delim "=" | '
-			"awk '$4 ~ \"=\"' | "
-			'awk \'{{ OFS="\\t"; split($5,a,"="); split($4,b,"="); max=0; stop=0; '
-			"for(i=0; i<length(a); i++) "
-			'{{split(a[i],d,";"); if(d[2] > max) {{max = d[2]; stop=i}} }} '
-			"print b[stop],$4 }}' "
-			"> {output.nearby_peaks} 2> {log} \n"
+		"""
+		# TODO: Fix this such that it doesn't capture peaks more than 500 bp away
+		# slopBed -b 500 -g {input.hg38} -i {input.peaks} | \
+		# bedtools intersect -b stdin -a {input.peaks} -wa -wb | \
+		# awk -v OFS="\t" '{if (a[$4]) a[$4]=a[$4] "=" $10; else a[$4]=$10} END {for (i in a) print i, a[i]}'
+
+		sort -k1,1 -k2,2n {input.peaks} | \
+			mergeBed -d 500 -i stdin -c 4,5 -o collapse,collapse -delim "=" | \
+			awk '$4 ~ "="' | \
+			awk '{OFS="\t"; split($5,a,"="); split($4,b,"="); max=0; stop=0; \
+				for(i=0; i<length(a); i++) \
+				{split(a[i],d,";"); if(d[2] > max) {max = d[2]; stop=i} } print b[stop],$4}' \
+			> {output.nearby_peaks} 2> {log}
+		"""
 
 
 rule intersect_regions:

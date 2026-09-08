@@ -82,7 +82,9 @@ rule call_transductions:
 	group:
 		"transduction"
 	shell:
-		"Rscript {workflow.basedir}/scripts/transduction_calling.R "
-			"{input.transduction_big_table} {output.transduction_plots} "
-			"{output.filtered_transduction} {input.transduction_bed} {input.classified_peaks} "
-			"2> {log}"
+		"""
+		Rscript {workflow.basedir}/scripts/transduction_calling.R \
+			{input.transduction_big_table} {output.transduction_plots} \
+			{output.filtered_transduction} {input.transduction_bed} {input.classified_peaks} \
+			2> {log}
+		"""

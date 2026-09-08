@@ -89,7 +89,7 @@ def get_gmotif_mem_mb(wildcards, input, attempt):
 
 
 def get_extract_clipping_mem_mb(wildcards, input, attempt):
-	mb = min(10 * input.size_mb, 100) * (2 ** (attempt - 1))
+	mb = min(12 * input.size_mb, 100) * (2 ** (attempt - 1))
 	return mb
 
 def get_extract_endpoints_mem_mb(wildcards, input, attempt):
