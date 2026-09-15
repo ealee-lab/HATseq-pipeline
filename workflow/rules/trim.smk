@@ -17,11 +17,11 @@ rule qc:
 		runtime=get_qc_runtime,
 		mem_mb=get_qc_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/qc/{sample}.log",
 	shell:
-		"""
+		r"""
 		mkdir -p {params.report_path}
 
 		# Run fastqc
@@ -39,13 +39,14 @@ rule qc:
 			2>> {log}
 		"""
 
+
 rule preprocessing:
 	input:
 		illumina_adapter_trim_fq1="{sample}/{sample}_illumina_adapter_trimmed_R1.fq.gz",
 		illumina_adapter_trim_fq2="{sample}/{sample}_illumina_adapter_trimmed_R2.fq.gz",
 	output:
 		L1HS_primer_trim_fromR2_fq1=temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_R1.fq.gz"),
-		L1HS_primer_trim_fromR2_fq2="{sample}/{sample}_L1HS_primer_trimmed_fromR2_R2.fq.gz",
+		L1HS_primer_trim_fromR2_fq2=temp("{sample}/{sample}_L1HS_primer_trimmed_fromR2_R2.fq.gz"),
 		L1_young_seq_trim_fromR2_fq2=temp("{sample}/{sample}_L1_young_seq_trimmed_fromR2_R2.fq.gz"),
 		young_L1_readID_list="{sample}/{sample}_young_L1_readID_list.txt",
 		young_L1_reads_fromR1_fq1=temp("{sample}/{sample}_young_L1_reads_fromR1_R1.fq.gz"),
@@ -64,7 +65,7 @@ rule preprocessing:
 		runtime=get_preprocessing_runtime,
 		mem_mb=get_preprocessing_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/preprocessing/{sample}.log",
 	script:

@@ -20,14 +20,15 @@ tmpdir=$(realpath $3)
 profile=$(realpath $4)
 
 # Create environment if needed and activate 
-CONDA_BASE=$(conda info --base)
-source $CONDA_BASE/etc/profile.d/conda.sh
+# CONDA_BASE=$(conda info --base)
+# source ~/miniconda3/etc/profile.d/conda.sh # replace with path to your conda installation
+module load miniforge
 
-if conda env list | grep -E "^HATseq\b"; then
-    conda activate HATseq
+if conda env list | grep -E "^snakemake\b"; then
+    conda activate snakemake
 else
-    conda env create --file envs/HATseq.yml --yes
-    conda activate HATseq
+    conda env create --file envs/snakemake.yml
+    conda activate snakemake
 fi
 
 export TMPDIR=${tmpdir} # used as tmpdir by snakemake

@@ -16,7 +16,7 @@ rule peak_calling:
 		runtime=get_peak_calling_runtime,
 		mem_mb=get_peak_calling_mem_mb,
 	conda:
-		"../envs/samtools.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/peak_calling/{sample}.log",
 	group:
@@ -35,7 +35,7 @@ rule match_peak_reads:
 		runtime=get_peak_calling_runtime,
 		mem_mb=get_peak_calling_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/match_peak_reads/{sample}.log",
 	group:
@@ -54,7 +54,7 @@ rule count_templates:
 		runtime=get_count_templates_runtime,
 		mem_mb=get_count_templates_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/count_templates/{sample}.log",
 	group:
@@ -74,7 +74,7 @@ rule find_breakends:
 		runtime=10,
 		mem_mb=12000,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/find_breakends/{sample}.log",
 	group:
@@ -93,24 +93,23 @@ rule nearby_peak:
 		runtime=get_min_runtime,
 		mem_mb=get_min_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/nearby_peak/{sample}.log",
 	group:
 		"peaks"
 	shell:
-		"""
+		r"""
 		# TODO: Fix this such that it doesn't capture peaks more than 500 bp away
-		# slopBed -b 500 -g {input.hg38} -i {input.peaks} | \
-		# bedtools intersect -b stdin -a {input.peaks} -wa -wb | \
-		# awk -v OFS="\t" '{if (a[$4]) a[$4]=a[$4] "=" $10; else a[$4]=$10} END {for (i in a) print i, a[i]}'
-
 		sort -k1,1 -k2,2n {input.peaks} | \
 			mergeBed -d 500 -i stdin -c 4,5 -o collapse,collapse -delim "=" | \
 			awk '$4 ~ "="' | \
-			awk '{OFS="\t"; split($5,a,"="); split($4,b,"="); max=0; stop=0; \
+			awk -v OFS='\t' '{{ \
+				split($5,a,"="); split($4,b,"="); max=0; stop=0; \
 				for(i=0; i<length(a); i++) \
-				{split(a[i],d,";"); if(d[2] > max) {max = d[2]; stop=i} } print b[stop],$4}' \
+					{{split(a[i],d,";"); if(d[2] > max) {{max = d[2]; stop=i}} }} \
+					print b[stop],$4 \
+			}}' \
 			> {output.nearby_peaks} 2> {log}
 		"""
 
@@ -130,7 +129,7 @@ rule intersect_regions:
 		runtime=get_min_runtime,
 		mem_mb=get_min_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/intersect_regions/{sample}.log",
 	group:
@@ -143,7 +142,7 @@ rule intersect_databases:
 	input:
 		breakends="{sample}/{sample}_breakends.bed",
 		hg38=f"{ref_dir}/human/hg38.sorted.genome",
-		repeat_masker=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.L1.bed",
+		repeat_masker=f"{ref_dir}/RepeatMasker/hg38.repeatmasker.L1PA.bed",
 		Evrony_KR=f"{ref_dir}/RepeatMasker/hg38.Evrony_KR_960.liftover.bed",
 		i1kgp=f"{ref_dir}/1kgp/ALL_MELT_ME_1000G_HC_20190901.AF.bed",
 		gnomad=f"{ref_dir}/gnomAD-SV/gnomad.v4.1.ME.sites.bed",
@@ -158,7 +157,7 @@ rule intersect_databases:
 		runtime=get_min_runtime,
 		mem_mb=get_intersect_databases_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/intersect_databases/{sample}.log",
 	group:

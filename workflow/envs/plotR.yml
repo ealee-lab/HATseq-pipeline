@@ -2,8 +2,6 @@ name: plotR
 channels:
   - conda-forge
   - bioconda
-  - r
-  - defaults
 dependencies:
   - bedtools==2.30.0
   - r-base

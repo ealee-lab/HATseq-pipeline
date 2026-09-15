@@ -8,11 +8,11 @@ rule gmotif:
 		runtime=get_gmotif_runtime,
 		mem_mb=get_gmotif_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/gmotif/{sample}.log",
 	shell:
-		"""
+		r"""
 		seqtk subseq {input.L1HS_primer_trim_fromR2_fq2} {input.young_L1_readID_list} | \
 			seqtk seq -a - | \
 			grep 'CTTAGAGT' -B 1 | \
@@ -34,7 +34,7 @@ rule extract_clipping:
 		runtime=get_extract_clipping_runtime,
 		mem_mb=get_extract_clipping_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/extract_clipping/{sample}.log",
 	script:
@@ -71,7 +71,7 @@ rule junction_spanning:
 	log:
 		"logs/junction_spanning/{sample}.log",
 	shell:
-		"""
+		r"""
 		cat {input.softclip3p_table} | \
 			awk -v OFS='\t' \
 			'{{if(substr($5,1,30) ~ "{params.adapter_T}") print $1,$2,$3,$4,substr($5,1,30)}}' \

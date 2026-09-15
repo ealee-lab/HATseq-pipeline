@@ -10,7 +10,7 @@ rule create_big_table:
 		satellite_intersect="{sample}/{sample}_satellite_intersect.bed",
 		segdup_intersect="{sample}/{sample}_segdup_intersect.bed",
 		homopolymer_intersect="{sample}/{sample}_homopolymer_intersect.bed",
-		max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
+		# max_depth="{sample}/{sample}_max_depth_distance_to_boundary.txt",
 		polyT_reads="{sample}/{sample}_polyT_reads.txt",
 	output:
 		big_table="{sample}/{sample}_big_table.tsv",
@@ -18,7 +18,7 @@ rule create_big_table:
 		runtime=get_create_big_table_runtime,
 		mem_mb=get_create_big_table_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/create_big_table/{sample}.log",
 	group:
@@ -51,7 +51,7 @@ rule filter_and_classify:
 	group:
 		"classify"
 	shell:
-		"""
+		r"""
 		Rscript {workflow.basedir}/scripts/filter_and_plot.R \
 			{input.big_table} {output.filter_reasons} \
 			{params.library} {output.plots} \
@@ -80,16 +80,17 @@ rule multi_sample_classification:
 		runtime=get_min_runtime,
 		mem_mb=get_filter_and_classify_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/multi_sample_classification/{donor}.log",
 	group:
 		"classify"
 	shell:
-		"""
+		r"""
 		if [[ {params.num_samples} -lt 2 ]]; then
 			cat {input.sample_peaks} > {output.donor_peaks}
 			touch {output.multi_peaks}
+			grep "KNR" {input.sample_peaks} | grep "PASS" > {output.knr_peaks}
 		else
 			python {workflow.basedir}/scripts/multi_classify.py \
 				-d {wildcards.donor} \
@@ -113,9 +114,9 @@ rule multi_donor_classification:
 		runtime=5,
 		mem_mb=8000,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	shell:
-		"""
+		r"""
 		if [[ {params.num_donors} -lt 2 ]]; then
 			cat {input.donor_peaks} | grep "PASS" > {output.putative_peaks}
 		else 

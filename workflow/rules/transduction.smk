@@ -32,7 +32,7 @@ rule map_transduction_fasta:
 		runtime=get_map_transduction_fasta_runtime,
 		mem_mb=get_map_transduction_fasta_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/map_transduction_fasta/{sample}.log",
 	group:
@@ -55,7 +55,7 @@ rule transduction_big_table:
 		runtime=get_transduction_big_table_runtime,
 		mem_mb=get_transduction_big_table_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/python.yml"
 	log:
 		"logs/transduction_big_table/{sample}.log",
 	group:

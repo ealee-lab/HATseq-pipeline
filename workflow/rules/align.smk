@@ -22,7 +22,7 @@ rule alignment:
 		runtime=get_alignment_runtime,
 		mem_mb=get_alignment_mem_mb,
 	conda:
-		"../envs/samtools.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/alignment/{sample}.log",
 	group:
@@ -40,7 +40,7 @@ rule get_unique_reads:
 		runtime=get_min_runtime,
 		mem_mb=get_min_mem_mb,
 	conda:
-		"../envs/HATseq.yml"
+		"../envs/tools.yml"
 	log:
 		"logs/get_unique_reads/{sample}.log",
 	group:
