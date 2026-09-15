@@ -1,7 +1,7 @@
 library(bedtoolsr)
 # library(UpSetR)
-library(stringr) 
-library(reshape) 
+# library(stringr) 
+# library(reshape) 
 library(ggplot2) 
 library(tidyverse) 
 library(RColorBrewer) 
@@ -162,11 +162,6 @@ big_table$filter[(big_table$classification == "KNR") &
                  (big_table$unique_read_ratio < 0.1) | 
                  (big_table$polyA_percent == 0) | 
                  (big_table$RPM < 50))] <- "lowConf"
-# big_table$filter[(big_table$classification == "KNR") & 
-#                  ((big_table$peak_width < 150) & 
-#                  (big_table$unique_read_ratio < 0.1) & 
-#                  (big_table$polyA_percent == 0) & 
-#                  (big_table$RPM < 50))] <- "noise"
 # cat(
 #   paste0("\t\tLow-confidence KNRs: ", 
 #     nrow(big_table[(big_table$classification == "KNR") & (big_table$filter == "lowConf"),])), 

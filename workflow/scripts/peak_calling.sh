@@ -5,14 +5,14 @@ exec 2> "${snakemake_log[0]}"
 echo -e '#chrm\tstart\tend\tpeak_name\tnum_subpeaks;max_depth;length_subpeaks;depth_subpeaks\tstrand' \
 	> "${snakemake_output[peaks]}" 
 
-# if [[ "${snakemake_params[library]}" == "bulk" ]]; then dist=10; else dist=0; fi
+if [[ "${snakemake_params[library]}" == "bulk" ]]; then dist=10; else dist=1; fi
 
 cat <( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -ignoreD -strand + | \
 	awk '{OFS="\t"; print $1,$2,$3,$4,".","+",$3-$2}' ) \
 	<( genomeCoverageBed -ibam "${snakemake_input[peak_sorted_bam]}" -bg -ignoreD -strand - | \
 	awk '{OFS="\t"; print $1,$2,$3,$4,".","-",$3-$2}' ) | \
 	sort -k1,1 -k2,2n | \
-	mergeBed -d 1 -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | 
+	mergeBed -d $dist -i stdin -s -c 1,4,6,7,4 -o count,collapse,distinct,collapse,max | 
 	grep -v -E "chrEBV|chrM|chrUn|random" | \
 	sort -k1,1V -k2,2n | \
 	awk -v sample="${snakemake_wildcards[sample]}" \

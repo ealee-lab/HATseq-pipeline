@@ -49,7 +49,6 @@ def get_multiintvls(peak_BTs):
     fns = [bt.fn for bt in peak_BTs]
     intvls_BT = x.multi_intersect(i=fns)
     intvls_BT = intvls_BT.cut([0,1,2,4])
-    print(intvls_BT)
     intvls_BT = intvls_BT.sort().merge(d=50, c=4, o="distinct")
     return intvls_BT
 
@@ -171,13 +170,13 @@ def reclassify_KNR_peaks(format_df, total_samples):
     """Re-classify peaks detected across multiple samples."""
     reclass_df = format_df.copy()
 
-    thresh = np.ceil(total_samples / 3)
+    thresh = np.ceil(total_samples / 2)
     
-    # Pass if KNR is in at least a third of samples
+    # Pass if KNR is in at least half of samples
     reclass_df.loc[(reclass_df["num_samples"] >= thresh), "classification"] = "KNR"
     reclass_df["filter"] = "PASS (multi-sample)"
 
-    # Set to lowConf if KNR is in less than a third of samples
+    # Set to lowConf if KNR is in less half of samples
     reclass_df.loc[reclass_df["num_samples"] < thresh, "filter"] = "lowConf (multi-sample)"
 
     return reclass_df
