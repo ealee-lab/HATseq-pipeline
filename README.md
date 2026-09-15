@@ -10,23 +10,24 @@ This pipeline uses several annotations to remove reference and non-reference L1 
     - 1kgp
         - ALL_MELT_ME_1000G_HC_20190901.AF.bed # 1000G_2504_high_coverage_SV collection from 1000 Genomes
     - 1019_ONT
-        - 1019_ONT_Schloissnig2025.bed # Schloissnig et al. (2025), Supplementary Table 18
+        - 1019_ONT_Schloissnig2025.bed # Schloissnig et al. (2025), Supp Table 18
     - ErrorProne
         - bulk.NIH_Aging-AT.merged.error-prone.bed # generated from NIH NeuroBioBank data
-        - bulk.NIH_Aging.merged.error-prone.bed # generated from NIH NeuroBioBank data
     - gnomAD-SV
         - gnomad.v4.1.ME.sites.bed # gnomAD v4.1
     - HGSVC3
-        - MEI_Callset_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supplementary Table 32
-        - Ortho_MEI_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supplementary Table 34
+        - MEI_Callset_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supp Table 32
+        - Ortho_MEI_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supp Table 34
     - human
-        - hg38.genome # list of chrom sizes
+        - hg38.sorted.genome # (sorted) list of chrom sizes
         - hg38.hg19.homo8.chr.bed # homopolymers
     - nyuwa
         - MEI.GRCh38.HMEIDv1.1.final.bed # NyuWa
     - RepeatMasker
-        - hg38.Evrony_KR_960.v37.revised.bed # Evrony et al. (2012)
+        - hg38.Evrony_KR_960.liftover.bed # Evrony et al. (2012)
         - hg38.repeatmasker.bed # RepeatMasker 
+        - hg38.repeatmasker.L1PA.bed # RepeatMasker L1HS and (3') L1PA
+        - hg38.repeatmasker.Satellite.bed # RepeatMasker satellites
     - SegDup
         - hg38.genomicSuperDups.v37.chr.bed # segmental duplications
     - xTea
@@ -72,6 +73,24 @@ For a more permanent solution, users should locate the corresponding rule and re
 Lastly, users can override the resource requirements set in `common.smk` by adding the options `--default-resources RESOURCE=VALUE` or `--set-resources RULE:RESOURCE=VALUE` (for specific rules) to the running command in `run_HATseq-pipeline.sh`.
 
 # Changelog #
+**v0.5.0** Sep 15 2026
+- Reformat KNR annotations for consistency
+- Refactor conda envs and add stricter version criteria
+- Fix misnamed conda env file in running script; installation of env should proceed now
+- Fix bug in alignment that output some peaks with no unique reads
+- Use unique reads to count polyA reads and unique start positions
+- Ignore small deletions during peak_calling
+- Update intersect_databases to use breakends (30bp centered around 3' end) instead of entire peaks
+- Add filters to KR/KNR/Non-specific peaks to separate them into high-confidence (PASS), low-confidence, and noise categories
+- Change filter names and remove breakpoint filter
+- Add max_usp_distance as distinguishing criteria between private and clonal peaks
+- Relax UNK criteria in multi-sample classification
+- Output final KNR list after multi-sample classification
+- Add multi-donor classification to remove low-level peaks shared between donors
+- Add post-processing scripts to calculate somatic L1 retrotransposition rates on a per-sample basis
+- Add updated bulk error-prone regions
+- Minor formatting changes
+
 **v0.4.0** Jun 19 2026
 - Add constraints to library parameter in schema
 - Remove Ntag rule
