@@ -36,8 +36,8 @@ breakends = peaks.groupby(["chrm","peak_name","strand"]).agg({
 }).reset_index()
 del peaks
 
-breakends["start"] = breakends["clippoint"].astype(int) - 15
-breakends["end"] = breakends["clippoint"].astype(int) + 15
+breakends["start"] = breakends["clippoint"].astype(int) - 50
+breakends["end"] = breakends["clippoint"].astype(int) + 50
 breakends["score"] = "."
 
 breakends = breakends[["chrm","start","end","peak_name","score","strand"]]
