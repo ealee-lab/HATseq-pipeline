@@ -85,7 +85,7 @@ def filter_multiintvls(peak_df):
     multi_peaks = peak_df[peak_df["num_samples"] >= 2]
     
     # Interval must pass filters in >= 1 sample
-    put_peaks = multi_peaks[multi_peaks["filter"] == "PASS"]["name"].unique()
+    put_peaks = multi_peaks[multi_peaks["filter"].str.contains("PASS")]["name"].unique()
     multi_df = multi_peaks[multi_peaks["name"].isin(put_peaks)]
     return multi_df
 
@@ -171,7 +171,7 @@ def reclassify_KNR_peaks(format_df, total_samples):
     reclass_df = format_df.copy()
 
     thresh = np.ceil(total_samples / 2)
-    
+
     # Pass if KNR is in at least half of samples
     reclass_df.loc[(reclass_df["num_samples"] >= thresh), "classification"] = "KNR"
     reclass_df["filter"] = "PASS (multi-sample)"
@@ -219,7 +219,6 @@ def process_peaks(analysis_dfs, donor, comparison):
     """Given a list of sample-specific peaks, find and format intervals where
     the peaks overlap across multiple samples."""
     peak_BTs = [BedTool.from_dataframe(df) for df in analysis_dfs]
-
     intvls_BT = get_multiintvls(peak_BTs)
     peak_df = get_peaks_for_multiintvls(peak_BTs, intvls_BT, donor)
     multi_df = filter_multiintvls(peak_df)
@@ -239,8 +238,7 @@ def run_comparison(donor, peaks, comparison, total_samples):
         reclass_som_df = reclassify_peaks_by_signal(format_som_df, total_samples)
 
     # Compare KNR peaks across samples
-    knr_dfs = [df[df["classification"] == "KNR"] for df in file_dfs]
-    
+    knr_dfs = [df[df["classification"] == "KNR"].iloc[:, 0:8] for df in file_dfs]
     format_knr_df = process_peaks(knr_dfs, donor, comparison)
     reclass_knr_df = reclassify_KNR_peaks(format_knr_df, total_samples)
 
@@ -276,8 +274,8 @@ def main(donor, filenames, peakfile, multifile, knownfile, comparison):
                 tissue_files[tissue].append(file)
         
         peakfiles = []
-        multifiles = []
-        knownfiles = []
+        # multifiles = []
+        # knownfiles = []
 
         for tissue in tissue_files:
             num_reps = len(tissue_files[tissue])
@@ -293,7 +291,9 @@ def main(donor, filenames, peakfile, multifile, knownfile, comparison):
 
         num_tissues = len(tissue_files)
         if num_tissues < 2:
-            raise ValueError("At least two tissues are required to use 'both' comparison.")
+            tissue_df1.to_csv(peakfile, sep="\t", index=False, header=True)
+            tissue_df2.to_csv(multifile, sep="\t", index=False, header=True)
+            tissue_df3.to_csv(knownfile, sep="\t", index=False, header=True)
         else:
             both_df1, both_df2, both_df3 = run_comparison(donor, peakfiles, "tissue", num_tissues)
             both_df1.to_csv(peakfile, sep="\t", index=False, header=True)
