@@ -55,8 +55,12 @@ def main(workdir, outfile, proportion):
 		
 		private_read = count_df.loc[
 			(count_df["sample"] == sample) & (count_df["classification"] == "SOM_private"), "RPM"].iloc[0]
-		clonal_read = count_df.loc[
-			(count_df["sample"] == sample) & (count_df["classification"] == "SOM_clonal"), "RPM"].iloc[0]
+		try:
+			clonal_read = count_df.loc[
+				(count_df["sample"] == sample) & (count_df["classification"] == "SOM_clonal"), "RPM"].iloc[0]
+		except:
+			clonal_read = 0
+
 		som_read = private_read + clonal_read
 		
 		# Adjust by unmasked proportion of the genome and sample-specific recovery rate
