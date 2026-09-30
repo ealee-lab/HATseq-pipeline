@@ -1,7 +1,4 @@
 library(bedtoolsr)
-# library(UpSetR)
-# library(stringr) 
-# library(reshape) 
 library(ggplot2) 
 library(tidyverse) 
 library(RColorBrewer) 
@@ -19,6 +16,7 @@ summary <- args[6]
 error_prone <- args[7]
 truth_set <- args[8]
 
+#### INPUT ####
 # Read input and define columns
 canonical_chrs <- c(
   "chr1","chr2","chr3","chr4","chr5","chr6",
@@ -106,6 +104,59 @@ big_table$filter <- "-NA-"
 big_table$candidate <- TRUE
 big_table$FP <- FALSE
 
+# Define filtering conditions
+wide_peaks <- big_table$peak_width >= 150
+
+# In PTA libraries, flag smaller peaks nearby larger ones (amplification artifacts)
+if (library == "single") {
+  solo_peaks <- big_table$nearest_RPM_ratio == 1
+} else if (library == "micro") {
+  solo_peaks <- big_table$nearest_RPM_ratio == 1
+} else {
+  solo_peaks <- big_table$nearest_RPM_ratio > 0 # all peaks
+}
+
+# Require that peaks have multiple templates
+if (library == "single") {
+  template_peaks <- big_table$TPM >= 0.25
+} else if (library == "micro") {
+  template_peaks <- big_table$num_templates >= 2
+} else {
+  template_peaks <- big_table$num_templates >= 1 # all peaks
+}
+
+# In PTA libraries, flag peaks with uneven amplification of templates
+if (library == "single") {
+  even_peaks <- big_table$template_ratio >= 0.2
+} else if (library == "micro") {
+  even_peaks <- big_table$template_ratio >= 0.2
+} else {
+  even_peaks <- big_table$template_ratio > 0 # all peaks
+}
+
+# Require that at least 10% of peak reads are unique
+unique_peaks <- big_table$unique_read_ratio >= 0.1
+
+# Require that peaks have polyA reads
+if (library == "single") {
+  polyA_peaks <- big_table$polyA_percent >= 20
+} else if (library == "micro") {
+  polyA_peaks <- big_table$polyA_percent >= 10
+} else {
+  polyA_peaks <- big_table$polyA_percent > 0
+}
+
+# Require that peaks have a minimum signal level
+highRPM_peaks <- big_table$RPM >= 100
+midRPM_peaks <- big_table$RPM >= 50
+
+if (library == "single") {
+  lowRPM_peaks <- big_table$RPM >= 5
+} else {
+  lowRPM_peaks <- big_table$RPM >= 1
+}
+
+# Filter peaks by set conditions
 # Filters are successive (FP peak will be labeled by the first filter it fails)
 cat("\nFILTERS", file=summary_file, sep="\n")
 
@@ -113,98 +164,73 @@ cat("\nFILTERS", file=summary_file, sep="\n")
 if (library != "bulk") {
   cat("\n\tAll peaks", file=summary_file, sep="\n")
 
-  # In PTA libraries, remove smaller peaks nearby larger ones (amplification artifacts)
-  big_table$filter[!(big_table$FP) & (big_table$nearest_RPM_ratio < 1)] <- "nearby_peak"
-  big_table$FP[big_table$filter == "nearby_peak"] <- TRUE
+  big_table$filter[!(big_table$FP) & !(solo_peaks)] <- "nearbyPeak"
+  big_table$FP[big_table$filter == "nearbyPeak"] <- TRUE
   cat(
     paste0("\t\tNearby larger peak: ", 
-      nrow(big_table[big_table$filter == "nearby_peak",])), 
+      nrow(big_table[big_table$filter == "nearbyPeak",])), 
     file=summary_file, 
     sep="\n"
   )
 }
 
 # Label known reference (KR) peaks - priority
-# cat("\n\tKR/KNR peaks", file=summary_file, sep="\n")
 big_table$classification[(grepl("L1HS", big_table$nearest_KR) | 
                           grepl("L1Hs", big_table$nearest_KR)) &
                           !(big_table$FP)] <- "KR"
-big_table$filter[big_table$classification == "KR"] <- "PASS"
-big_table$filter[(big_table$classification == "KR") & 
-                 ((big_table$peak_width < 150) | (big_table$RPM < 100))] <- "lowConf"
-# cat(
-#   paste0("\t\tLow-confidence KRs: ", 
-#     nrow(big_table[(big_table$classification == "KR") & (big_table$filter == "lowConf"),])), 
-#   file=summary_file, 
-#   sep="\n"
-# )
+big_table$filter[big_table$classification == "KR"] <- "lowConf"
+big_table$filter[(big_table$classification == "KR") & (wide_peaks) & (highRPM_peaks)] <- "PASS"
 
-# Label Non-specific peaks
+# Label L1PA (Non-specific) peaks
 big_table$classification[grepl("L1PA2|L1PA3|L1PA4|L1PA5", big_table$nearest_KR) & 
                          (big_table$nearest_KR_dist <= big_table$nearest_KNR_dist) &
                          !(big_table$classification == "KR") & 
                          !(big_table$FP)] <- "Non-specific"
-big_table$filter[big_table$classification == "Non-specific"] <- "PASS"
-big_table$filter[(big_table$classification == "Non-specific") & 
-                 ((big_table$peak_width < 150) | (big_table$RPM < 100))] <- "lowConf" 
+big_table$filter[big_table$classification == "Non-specific"] <- "lowConf"
+big_table$filter[(big_table$classification == "Non-specific") & (wide_peaks) & (highRPM_peaks)] <- "PASS"
 
 # Label known non-reference (KNR) peaks
 # Also, artifically remove KNR labels from peaks in truth set for benchmarking
 big_table$classification[(grepl("LINE1", big_table$nearest_KNR) | 
                          grepl("L1", big_table$nearest_KNR)) & 
-                         (big_table$nearest_KNR_dist < big_table$nearest_KR_dist) &
                          !(big_table$peak %in% true_peak_IDs) &
                          !(big_table$classification == "KR") &
+                         !(big_table$classification == "Non-specific") &
                          !(big_table$FP)] <- "KNR"
-big_table$filter[big_table$classification == "KNR"] <- "PASS"
-big_table$filter[(big_table$classification == "KNR") & 
-                 ((big_table$peak_width < 150) | 
-                 (big_table$unique_read_ratio < 0.1) | 
-                 (big_table$polyA_percent == 0) | 
-                 (big_table$RPM < 50))] <- "lowConf"
-# cat(
-#   paste0("\t\tLow-confidence KNRs: ", 
-#     nrow(big_table[(big_table$classification == "KNR") & (big_table$filter == "lowConf"),])), 
-#   file=summary_file, 
-#   sep="\n"
-# ) 
+big_table$filter[big_table$classification == "KNR"] <- "lowConf"
+big_table$filter[(big_table$classification == "KNR") &
+                 (wide_peaks) &
+                 (unique_peaks) &
+                 (polyA_peaks) &
+                 (midRPM_peaks)] <- "PASS"
 
-# Separate category for noise near known elements
-if (library == "single") {RPM_threshold <- 5} else {RPM_threshold <- 1}
-big_table$filter[(big_table$classification != "Candidate") & (big_table$RPM < RPM_threshold)] <- "noise"
+# Label noise near known elements
+big_table$filter[(big_table$classification != "Candidate") & !(lowRPM_peaks)] <- "noise"
 
-# Filter remaining peaks for FPs
+# Filter remaining peaks for false positives
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 cat("\n\tCandidate peaks", file=summary_file, sep="\n")
 cat(paste0("\t\tTotal peaks: ", nrow(big_table[big_table$candidate,])), file=summary_file, sep="\n")
 
-if (library != "bulk") {
-  # Require multi-template support for PTA libraries
-  if (library == "single") {
-    big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$TPM < 0.25)] <- "templates"
-  } else if (library == "micro") {
-    big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$num_templates < 2)] <- "templates"
-  }
+big_table$filter[(big_table$candidate) & !(big_table$FP) & !(template_peaks)] <- "templates"
+big_table$FP[big_table$filter == "templates"] <- TRUE
+cat(
+  paste0("\t\tToo few templates: ", 
+    nrow(big_table[big_table$filter == "templates",])), 
+  file=summary_file, 
+  sep="\n"
+)
 
-  big_table$FP[big_table$filter == "templates"] <- TRUE
-  cat(
-    paste0("\t\tToo few templates: ", 
-      nrow(big_table[big_table$filter == "templates",])), 
-    file=summary_file, 
-    sep="\n"
-  )
+big_table$filter[(big_table$candidate) & !(big_table$FP) & !(even_peaks)] <- "templateRatio"
+big_table$FP[big_table$filter == "templateRatio"] <- TRUE
+cat(
+  paste0("\t\tTemplate ratio: ",
+    nrow(big_table[big_table$filter == "templateRatio",])), 
+  file=summary_file, 
+  sep="\n"
+)
 
-  big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$template_ratio < 0.2)] <- "templateRatio"
-  big_table$FP[big_table$filter == "templateRatio"] <- TRUE
-  cat(
-    paste0("\t\tTemplate ratio: ",
-      nrow(big_table[big_table$filter == "templateRatio",])), 
-    file=summary_file, 
-    sep="\n"
-  )
-}
-
-big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$unique_read_ratio < 0.1)] <- "uniqueReads"
+big_table$filter[(big_table$candidate) & !(big_table$FP) & !(unique_peaks)] <- "uniqueReads"
 big_table$FP[big_table$filter == "uniqueReads"] <- TRUE
 cat(
   paste0("\t\tFew unique reads: ", 
@@ -213,14 +239,7 @@ cat(
   sep="\n"
 )
 
-if (library == "single") {
-  big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 20)] <- "polyApercent"
-} else if (library == "micro") {
-  big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent < 10)] <- "polyApercent"
-} else {
-  big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$polyA_percent == 0)] <- "polyApercent"
-}
-
+big_table$filter[(big_table$candidate) & !(big_table$FP) & !(polyA_peaks)] <- "polyApercent"
 big_table$FP[big_table$filter == "polyApercent"] <- TRUE
 cat(
   paste0("\t\tNo polyA containing reads (junction spanning): ", 
@@ -229,7 +248,7 @@ cat(
   sep="\n"
 )
 
-big_table$filter[(big_table$candidate) & !(big_table$FP) & (big_table$RPM < RPM_threshold)] <-"RPM"
+big_table$filter[(big_table$candidate) & !(big_table$FP) & !(lowRPM_peaks)] <-"RPM"
 big_table$FP[big_table$filter == "RPM"] <- TRUE
 cat(
   paste0("\t\tLow RPM: ", 
@@ -242,16 +261,17 @@ big_table$classification[big_table$FP] <- "FP"
 big_table$candidate[big_table$classification != "Candidate"] <- FALSE
 big_table$filter[big_table$candidate] <- "PASS"
 
-# Label candidate peaks as UNK/SOM
+# Label peaks passing filters as UNK/SOM
 if (library == "bulk") {
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
-  big_table$classification[big_table$classification == "Candidate" & ((big_table$num_templates > 1) & (big_table$max_usp_distance >= 10))] <- "SOM_clonal"
-  big_table$classification[big_table$classification == "Candidate" & ((big_table$num_templates == 1) | (big_table$max_usp_distance < 10))] <- "SOM_private"
+  big_table$classification[big_table$candidate & (midRPM_peaks) & (wide_peaks)] <- "UNK"
+  # big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
+  big_table$classification[big_table$candidate & ((big_table$num_templates > 1) & (big_table$max_usp_distance >= 10))] <- "SOM_clonal"
+  big_table$classification[big_table$candidate & ((big_table$num_templates == 1) | (big_table$max_usp_distance < 10))] <- "SOM_private"
 } else if (library == "micro") {
-  big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
-  big_table$classification[big_table$classification == "Candidate"] <- "SOM"
+  big_table$classification[big_table$candidate & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
+  big_table$classification[big_table$candidate] <- "SOM"
 } else {
-  big_table$classification[big_table$classification == "Candidate"] <- "SOM" # need multiple cells to distinguish
+  big_table$classification[big_table$candidate] <- "SOM" # need multiple cells to distinguish
 }
 
 # Filter out SOM peaks in error-prone regions if regions are provided
@@ -333,7 +353,7 @@ cat(
     sep="\n"
   )
 
-#### Plotting ####
+#### PLOTTING ####
 filters <- ggplot(big_table[big_table$classification == "FP",], aes(x=filter, group=classification, color=classification, fill=classification)) +
   geom_bar() +
   scale_fill_nejm() +
@@ -348,7 +368,7 @@ pdf(plots_path)
 filters
 dev.off()
 
-# Candidate table
+#### OUTPUT ####
 bed_cols = c(
   "chrm","start","end","peak","RPM","strand",
   "classification","filter"
