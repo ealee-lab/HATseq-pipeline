@@ -37,30 +37,15 @@ rule extract_clipping:
 		"../envs/python.yml"
 	log:
 		"logs/extract_clipping/{sample}.log",
+	group:
+		"clip"
 	script:
 		"../scripts/extract_clipping.py"
-
-
-# rule extract_endpoints:
-# 	input:
-# 		peak_sorted_bam="{sample}/{sample}_peak_sorted_bwa.bam",
-# 	output:
-# 		endpoint3p_table="{sample}/{sample}_endpoint_3p.tsv",
-# 	resources:
-# 		runtime=get_extract_clipping_runtime,
-# 		mem_mb=get_extract_endpoints_mem_mb,
-# 	conda:
-# 		"../envs/HATseq.yml"
-# 	log:
-# 		"logs/extract_endpoints/{sample}.log",
-# 	script:
-# 		"../scripts/extract_endpoints.py"
-
+		
 
 rule junction_spanning:
 	input:
 		softclip3p_table="{sample}/{sample}_softclip_3p.tsv",
-		# uniq_readID_list="{sample}/{sample}_unique_readID_list.txt"
 	output:
 		polyT_reads="{sample}/{sample}_polyT_reads.txt",
 	params:
@@ -70,6 +55,8 @@ rule junction_spanning:
 		mem_mb=get_min_mem_mb,
 	log:
 		"logs/junction_spanning/{sample}.log",
+	group:
+		"clip"
 	shell:
 		r"""
 		cat {input.softclip3p_table} | \

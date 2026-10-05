@@ -263,15 +263,15 @@ big_table$filter[big_table$candidate] <- "PASS"
 
 # Label peaks passing filters as UNK/SOM
 if (library == "bulk") {
-  big_table$classification[big_table$candidate & (midRPM_peaks) & (wide_peaks)] <- "UNK"
+  big_table$classification[(big_table$classification == "Candidate") & (midRPM_peaks) & (wide_peaks)] <- "UNK"
   # big_table$classification[big_table$classification == "Candidate" & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
-  big_table$classification[big_table$candidate & ((big_table$num_templates > 1) & (big_table$max_usp_distance >= 10))] <- "SOM_clonal"
-  big_table$classification[big_table$candidate & ((big_table$num_templates == 1) | (big_table$max_usp_distance < 10))] <- "SOM_private"
+  big_table$classification[(big_table$classification == "Candidate") & ((big_table$num_templates > 1) & (big_table$max_usp_distance >= 10))] <- "SOM_clonal"
+  big_table$classification[(big_table$classification == "Candidate") & ((big_table$num_templates == 1) | (big_table$max_usp_distance < 10))] <- "SOM_private"
 } else if (library == "micro") {
-  big_table$classification[big_table$candidate & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
-  big_table$classification[big_table$candidate] <- "SOM"
+  big_table$classification[(big_table$classification == "Candidate") & big_table$RPM >= 100 & big_table$TPM >= 4] <- "UNK"
+  big_table$classification[(big_table$classification == "Candidate")] <- "SOM"
 } else {
-  big_table$classification[big_table$candidate] <- "SOM" # need multiple cells to distinguish
+  big_table$classification[(big_table$classification == "Candidate")] <- "SOM" # need multiple cells to distinguish
 }
 
 # Filter out SOM peaks in error-prone regions if regions are provided

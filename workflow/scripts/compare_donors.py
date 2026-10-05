@@ -25,7 +25,8 @@ def main(filenames, outfile):
 	rename_peaks = merged_peaks[(merged_peaks["classification"].str.contains("SOM")) & 
 								(merged_peaks["classification"].str.contains("UNK"))]
 	rename_peak_list = ",".join(rename_peaks["peak"]).split(",")
-	peaks_df.loc[peaks_df["peak"].isin(rename_peak_list), "classification"] = "UNK (multi-donor)"
+	peaks_df.loc[peaks_df["peak"].isin(rename_peak_list), "classification"] = "UNK"
+	peaks_df.loc[peaks_df["peak"].isin(rename_peak_list), "filter"] = "PASS (multi-donor)"
 
 	# Filter out low-level peaks that are recurrent across donors (likely noise)
 	put_peaks = merged_peaks[merged_peaks["donor"] == 1]

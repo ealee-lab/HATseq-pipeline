@@ -39,7 +39,7 @@ include: "rules/classify.smk"
 include: "rules/transduction.smk"
 
 localrules:
-    HATseq,
+    HATseq
 
 
 rule HATseq:
