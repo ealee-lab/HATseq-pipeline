@@ -35,7 +35,7 @@ def main(workdir, outfile, proportion):
 
 		donor = re.search(rf'{donor_str}', os.path.basename(sample_file)).group(0)
 		sample_knr = len(
-			sample_df[(sample_df["classification"] == "KNR") & (sample_df["filter"] == "PASS")])
+			sample_df[(sample_df["classification"] == "KNR") & (sample_df["filter"].str.contains("PASS"))])
 		
 		recall_rates[sample] = sample_knr / num_knrs[donor]
 
@@ -53,15 +53,8 @@ def main(workdir, outfile, proportion):
 		knr_read = count_df.loc[
 			(count_df["sample"] == sample) & (count_df["classification"] == "KNR"), "RPM"].iloc[0]
 		
-		private_read = count_df.loc[
-			(count_df["sample"] == sample) & (count_df["classification"] == "SOM_private"), "RPM"].iloc[0]
-		try:
-			clonal_read = count_df.loc[
-				(count_df["sample"] == sample) & (count_df["classification"] == "SOM_clonal"), "RPM"].iloc[0]
-		except:
-			clonal_read = 0
-
-		som_read = private_read + clonal_read
+		som_read = sum(count_df.loc[
+			(count_df["sample"] == sample) & (count_df["classification"].str.contains("SOM")), "RPM"])
 		
 		# Adjust by unmasked proportion of the genome and sample-specific recovery rate
 		som_copy = ((knr_copy * (som_read / knr_read)) / proportion) / recall_rates[sample]
