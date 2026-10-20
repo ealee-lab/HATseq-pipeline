@@ -47,8 +47,8 @@ true_peak_IDs = list()
 if (truth_set != "-NA-") {
   big_bed <- big_table[, c("chrm","start","end","peak","RPM","strand")]
 
-  big_bed[big_bed$strand == "+", "start"] <- big_bed[big_bed$strand == "+", "end"] # 3' end
-  big_bed[big_bed$strand == "-", "end"] <- big_bed[big_bed$strand == "-", "start"]
+  # big_bed[big_bed$strand == "+", "start"] <- big_bed[big_bed$strand == "+", "end"] # 3' end
+  # big_bed[big_bed$strand == "-", "end"] <- big_bed[big_bed$strand == "-", "start"]
 
   true_bed <- read_tsv(
     truth_set, 

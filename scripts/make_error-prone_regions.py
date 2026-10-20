@@ -42,7 +42,7 @@ if __name__ == "__main__":
         
         donor_bed = pd.read_csv(peak_file[0], sep="\t").sort_values(by=["chrm","start"])
         donor_bed = donor_bed[donor_bed["classification"].str.contains(r"SOM|UNK|FP")]
-        donor_bed = donor_bed[donor_bed["filter"] != "nearby_peak"]
+        donor_bed = donor_bed[donor_bed["filter"] != "nearbyPeak"]
         donor_beds.append(donor_bed)
     
     err_regions = intersect_donor_peaks(donor_beds)

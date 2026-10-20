@@ -73,6 +73,10 @@ For a more permanent solution, users should locate the corresponding rule and re
 Lastly, users can override the resource requirements set in `common.smk` by adding the options `--default-resources RESOURCE=VALUE` or `--set-resources RULE:RESOURCE=VALUE` (for specific rules) to the running command in `run_HATseq-pipeline.sh`.
 
 # Changelog #
+**v0.5.2** Oct 20 2026
+- Fix bug in error-prone region generation for PTA libraries
+- Update single-cell and microbulk error-prone regions
+
 **v0.5.1** Oct 5 2026
 - Extend breakends to +/- 50bp of 3' end
 - Fix bug where KNR peaks went unlabeled
