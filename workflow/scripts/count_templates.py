@@ -1,16 +1,13 @@
 import pysam
-import statistics
 
-ibam=pysam.AlignmentFile(snakemake.input.peak_sorted_bam,'rb')
-
+ibam=pysam.AlignmentFile(snakemake.input.trim_uniq_sorted_bam,'rb')
 ibed=open(snakemake.input.peaks, 'r')
 obed=open(snakemake.output.unique_start_positions, 'w')
-header = ["#peak_name", "num_bam_reads", "num_peak_reads", "num_usp;depth", 
-		  "max_neighbor_difference", "median_neighbor_difference", "mean_neighbor_difference"]
+
+header = ["#peak_name", "num_unique_reads", "num_usp;depth", "num_uep;depth", "max_usp_distance"]
 obed.write("\t".join(header) + "\n")
 
-ibam_total_reads = sum([i[3] for i in ibam.get_index_statistics()])
-peak_readID_list = []
+# ibam_total_reads = sum([i[3] for i in ibam.get_index_statistics()])
 
 for peak_line in ibed:
 	if peak_line.startswith("#"):
@@ -18,57 +15,76 @@ for peak_line in ibed:
 
 	peak = peak_line.strip().split("\t")
 	peak_iter = ibam.fetch(peak[0], int(peak[1]), int(peak[2]))
+
+	# Unique start positions used as proxy for number of unique PCR templates
+	# Unique end positions mark where read ends
 	this_peak_usp_dictionary = {}
+	this_peak_uep_dictionary = {}
+
+	# this_peak_unique_reads = 0
 
 	for read in peak_iter:
-		if read.is_reverse:
-			key = read.reference_name + ":" + str(read.reference_end)
-		else:
-			key = read.reference_name + ":" + str(read.reference_start)
-
 		if peak[5] == "-":
 			if read.is_reverse:
-				if not key in this_peak_usp_dictionary.keys():
-					this_peak_usp_dictionary[key] = (0,0)
-				peak_readID_list.append([peak[3], read.query_name])
+				if read.cigartuples[-1][0] == 4:
+					skey = read.reference_name + ":" + str(read.reference_end + read.cigartuples[-1][1])
+				else: 
+					skey = read.reference_name + ":" + str(read.reference_end)
 
-				this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-												 this_peak_usp_dictionary[key][1]+1)
+				if not skey in this_peak_usp_dictionary.keys():
+					this_peak_usp_dictionary[skey] = 0
+
+				ekey = read.reference_name + ":" + str(read.reference_start)
+				if not ekey in this_peak_uep_dictionary.keys():
+					this_peak_uep_dictionary[ekey] = 0
+
+				this_peak_usp_dictionary[skey] += 1
+				this_peak_uep_dictionary[ekey] += 1
+				# this_peak_unique_reads += 1
+	
 		elif peak[5] == "+":
 			if not read.is_reverse:
+				if read.cigartuples[0][0] == 4:
+					key = read.reference_name + ":" + str(read.reference_start - read.cigartuples[0][1])
+				else:
+					key = read.reference_name + ":" + str(read.reference_start)
+				
 				if not key in this_peak_usp_dictionary.keys():
-					this_peak_usp_dictionary[key] = (0,0)
-				peak_readID_list.append([peak[3], read.query_name])
+					this_peak_usp_dictionary[key] = 0
 
-				this_peak_usp_dictionary[key] = (this_peak_usp_dictionary[key][0]+1,
-												 this_peak_usp_dictionary[key][1]+1)
+				ekey = read.reference_name + ":" + str(read.reference_end)
+				if not ekey in this_peak_uep_dictionary.keys():
+					this_peak_uep_dictionary[ekey] = 0
+
+				this_peak_usp_dictionary[key] += 1
+				this_peak_uep_dictionary[ekey] += 1
+				# this_peak_unique_reads += 1
 	
-	this_peak_total_reads = sum(
-		[this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()])
-	duplicates_list = [this_peak_usp_dictionary[key][1] for key in this_peak_usp_dictionary.keys()]
-	difference_list = []
+	this_peak_unique_reads = sum(
+		[this_peak_usp_dictionary[key] for key in this_peak_usp_dictionary.keys()])
+	
+	skey_list = this_peak_usp_dictionary.keys()
+	usp_list = [int(s.split(":")[1]) for s in skey_list]
+	left_usp = min(usp_list)
+	right_usp = max(usp_list)
+	usp_dist = right_usp - left_usp
 
-	if(len(duplicates_list) > 1):
-		for i in range(0,len(duplicates_list)-1):
-			difference_list.append(abs(duplicates_list[i] - duplicates_list[i+1]))
-	else:
-		difference_list = [-1]
+	sduplicates_list = [this_peak_usp_dictionary[key] for key in this_peak_usp_dictionary.keys()]
+	sduplicates_list.sort(reverse=True)
 
-	duplicates_list.sort(reverse=True)
+	eduplicates_list = [this_peak_uep_dictionary[key] for key in this_peak_uep_dictionary.keys()]
+	eduplicates_list.sort(reverse=True)
 
 	ostring = (peak[3] + "\t" + 
-			      str(ibam_total_reads) + "\t" + 
-			      str(this_peak_total_reads) + "\t" + 
-				  str(len(this_peak_usp_dictionary.keys())) + ";" + 
-				  ",".join(map(str, duplicates_list)) + "\t" + 
-				  str(max(difference_list)) + "\t" + 
-				  str(statistics.median(difference_list)) + "\t" + 
-				  str(statistics.mean(difference_list)) + "\n")
+			#    str(ibam_total_reads) + "\t" + 
+			#    str(this_peak_total_reads) + "\t" + 
+			   str(this_peak_unique_reads) + "\t" +
+			   str(len(this_peak_usp_dictionary.keys())) + ";" + 
+			   ",".join(map(str, sduplicates_list)) + "\t" +
+			   str(len(this_peak_uep_dictionary.keys())) + ";" + 
+			   ",".join(map(str, eduplicates_list)) + "\t" +
+			   str(usp_dist) + "\n")
 	obed.write(ostring) 
-
-with open(snakemake.output.peak_readID_list, 'w') as list:
-	for peak_read in peak_readID_list:
-		list.write("\t".join(peak_read) + "\n")
 
 obed.close()
 ibed.close()

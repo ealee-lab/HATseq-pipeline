@@ -23,4 +23,4 @@ CONDA_BASE=$(conda info --base)
 source $CONDA_BASE/etc/profile.d/conda.sh
 conda activate HATseq
 
-python make_error-prone_regions.py ${donor_list} ${resdir} ${outfile}
+python make_error-prone_regions.py -l ${donor_list} -d ${resdir} -o ${outfile}

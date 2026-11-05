@@ -1,5 +1,5 @@
 # HAT-seq Pipeline #
-This is a pipeline for the Human Active Transposon sequencing methodology. 
+This is a pipeline to analyze **e**nhanced **H**uman **A**ctive **T**ransposon **seq**uencing (eHAT-seq) libraries. 
 
 # Setting up the Pipeline #
 ## Reference Folder ##
@@ -10,23 +10,24 @@ This pipeline uses several annotations to remove reference and non-reference L1 
     - 1kgp
         - ALL_MELT_ME_1000G_HC_20190901.AF.bed # 1000G_2504_high_coverage_SV collection from 1000 Genomes
     - 1019_ONT
-        - 1019_ONT_Schloissnig2025.bed # Schloissnig et al. (2025), Supplementary Table 18
+        - 1019_ONT_Schloissnig2025.bed # Schloissnig et al. (2025), Supp Table 18
     - ErrorProne
         - bulk.NIH_Aging-AT.merged.error-prone.bed # generated from NIH NeuroBioBank data
-        - bulk.NIH_Aging.merged.error-prone.bed # generated from NIH NeuroBioBank data
     - gnomAD-SV
         - gnomad.v4.1.ME.sites.bed # gnomAD v4.1
     - HGSVC3
-        - MEI_Callset_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supplementary Table 32
-        - Ortho_MEI_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supplementary Table 34
+        - MEI_Callset_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supp Table 32
+        - Ortho_MEI_GRCh38.ALL.20241211.bed # Logsdon et al. (2025), Supp Table 34
     - human
-        - hg38.genome # list of chrom sizes
+        - hg38.sorted.genome # (sorted) list of chrom sizes
         - hg38.hg19.homo8.chr.bed # homopolymers
     - nyuwa
         - MEI.GRCh38.HMEIDv1.1.final.bed # NyuWa
     - RepeatMasker
-        - hg38.Evrony_KR_960.v37.revised.bed # Evrony et al. (2012)
+        - hg38.Evrony_KR_960.liftover.bed # Evrony et al. (2012)
         - hg38.repeatmasker.bed # RepeatMasker 
+        - hg38.repeatmasker.L1PA.bed # RepeatMasker L1HS and (3') L1PA
+        - hg38.repeatmasker.Satellite.bed # RepeatMasker satellites
     - SegDup
         - hg38.genomicSuperDups.v37.chr.bed # segmental duplications
     - xTea
@@ -35,7 +36,7 @@ This pipeline uses several annotations to remove reference and non-reference L1 
 ```
 
 ## Config Files ##
-See `config.library.yml` for an example config file. It is expected that you will have one config file for each library type (bulk, microbulk, single-cell), but you can split the pipeline into as many runs as you would like. Each config file links to a sample sheet with sample-specific information (`samples.library.tsv`) including donor, tissue/cell/rep, raw_fastq1, raw_fastq2, and index_seq. Currently, the pipeline does not support nested comparisons, so users can only compare across either tissues OR cells OR replicates.
+See `config.library.yml` for an example config file. It is expected that you will have one config file for each library type (bulk, microbulk, single-cell), but you can split the pipeline into as many runs as you would like. Each config file links to a sample sheet with sample-specific information (`samples.library.tsv`) including donor, tissue/cell/rep, raw_fastq1, raw_fastq2, and index_seq. Users can compare across either tissues, cells, replicates, or both tissues and replicates. Replicates must be identified by a capital letter followed by a number (e.g. R1) in the sample sheet.
 
 The error_prone and truth_set fields in the config file are optional. You can use the provided error-prone regions or generate your own with the `run_make_error-prone_regions.sh` script. The truth_set field is available in the case that you want to compare the pipeline output to a ground truth set of insertions. Truth sets are expected to be BED6 files of L1 insertions.
 
@@ -70,3 +71,64 @@ That being said, if the allocated resources are insufficient, users have several
 For a more permanent solution, users should locate the corresponding rule and resource in `rules/common.smk` and increase resources. For example, if the pipeline errors on the preprocessing rule with an Out of Memory error, locate the `get_preprocessing_mem_mb()` function in `common.smk` and type in amount of memory (in MB) you would like to request for that rule.
 
 Lastly, users can override the resource requirements set in `common.smk` by adding the options `--default-resources RESOURCE=VALUE` or `--set-resources RULE:RESOURCE=VALUE` (for specific rules) to the running command in `run_HATseq-pipeline.sh`.
+
+# Changelog #
+**v0.5.2** Oct 20 2026
+- Fix bug in error-prone region generation for PTA libraries
+- Update single-cell and microbulk error-prone regions
+
+**v0.5.1** Oct 5 2026
+- Extend breakends to +/- 50bp of 3' end
+- Fix bug where KNR peaks went unlabeled
+- Relabel multi-donor UNK peaks as UNK
+- Update all error-prone regions
+- Make rate calculation compatible with PTA libraries
+
+**v0.5.0** Sep 15 2026
+- Reformat KNR annotations for consistency
+- Refactor conda envs and add stricter version criteria
+- Fix misnamed conda env file in running script; installation of env should proceed now
+- Fix bug in alignment that output some peaks with no unique reads
+- Use unique reads to count polyA reads and unique start positions
+- Ignore small deletions during peak_calling
+- Update intersect_databases to use breakends (30bp centered around 3' end) instead of entire peaks
+- Add filters to KR/KNR/Non-specific peaks to separate them into high-confidence (PASS), low-confidence, and noise categories
+- Change filter names and remove breakpoint filter
+- Add max_usp_distance as distinguishing criteria between private and clonal peaks
+- Relax UNK criteria in multi-sample classification
+- Output final KNR list after multi-sample classification
+- Add multi-donor classification to remove low-level peaks shared between donors
+- Add post-processing scripts to calculate somatic L1 retrotransposition rates on a per-sample basis
+- Add updated bulk error-prone regions
+- Minor formatting changes
+
+**v0.4.0** Jun 19 2026
+- Add constraints to library parameter in schema
+- Remove Ntag rule
+- Merge peaks within 10bp for bulk samples, keep separate for PTA samples
+- Reintroduce homopolymer annotation
+- Refactor intersect_databases rule
+- Retain template_ratio filter, use breakpoint filter, remove peak_width filter
+- Fix bug in multi-replicate labeling that caused UNK peaks to be labeled SOM_private
+- Add updated error-prone regions
+- Minor formatting changes
+- Minor change to precision calculation
+
+**v0.3.0** May 5 2026
+- Refactor rules into individual files, add conda and log directives, remove benchmark directives
+- Add KR/KNR/Non-specific peaks to all_classified_peaks.bed
+- Remove ALR/Alpha, misaligned, chimera, and template_ratio filters; add unique_read_ratio and peak_width filters
+- Modifications to `reference/RepeatMasker` BED files, including separate Satellites file
+- Narrow region used for Non-specific classification to +/- 500bp of 3' end
+- Rename Off-target class to Non-specific
+- Incorporate alignment info in extract_clipping and junction_spanning rules
+- Fix indexing error in extract_clipping
+- Merge peaks within 5bp of each other during peak calling
+- Simplify preprocessing rule
+
+**v0.2.0** Mar 16 2026
+- Add support for multi-sample classification across tissues AND replicates
+- Add exact values for chimera and A/T-rich (prev. misaligned) filters
+
+**v0.1.0** Feb 20 2026
+- Frozen version for SMaHT MEI benchmarking paper 

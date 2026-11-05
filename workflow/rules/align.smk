@@ -1,0 +1,49 @@
+rule alignment:
+	input:
+		ref_genome=config["bwa_ref_genome"],
+		L1HS_trim_fromR1_fq1="{sample}/{sample}_mappable_L1HS_seq_trimmed_fromR1_R1.fq.gz",
+		L1HS_polyA_trim_fromR1_fq1="{sample}/{sample}_mappable_polyA_trimmed_fromR1_R1.fq.gz",
+	output:
+		bwa_bam=temp("{sample}/{sample}_bwa.bam"),
+		bwa_sorted_bam="{sample}/{sample}_bwa_sorted.bam",
+		bwa_sorted_index="{sample}/{sample}_bwa_sorted.bam.bai",
+		trim_bwa_bam=temp("{sample}/{sample}_trim_bwa.bam"),
+		trim_uniq_bam=temp("{sample}/{sample}_trim_uniq.bam"),
+		trim_uniq_sorted_bam="{sample}/{sample}_trim_uniq_sorted.bam",
+		trim_uniq_sorted_index="{sample}/{sample}_trim_uniq_sorted.bam.bai",
+		trim_peaks="{sample}/{sample}_trim_peaks.bed",
+		peak_bam=temp("{sample}/{sample}_peak_bwa.bam"),
+		peak_sorted_bam="{sample}/{sample}_peak_sorted_bwa.bam",
+		peak_sorted_index="{sample}/{sample}_peak_sorted_bwa.bam.bai",
+	params:
+		RG_ID=get_read_group,
+	threads: 8
+	resources:
+		runtime=get_alignment_runtime,
+		mem_mb=get_alignment_mem_mb,
+	conda:
+		"../envs/tools.yml"
+	log:
+		"logs/alignment/{sample}.log",
+	group:
+		"align"
+	script:
+		"../scripts/alignment.sh"
+
+
+rule get_unique_reads:
+	input:
+		trim_uniq_sorted_bam="{sample}/{sample}_trim_uniq_sorted.bam",
+	output:
+		uniq_readID_list="{sample}/{sample}_unique_readID_list.txt"
+	resources:
+		runtime=get_min_runtime,
+		mem_mb=get_min_mem_mb,
+	conda:
+		"../envs/tools.yml"
+	log:
+		"logs/get_unique_reads/{sample}.log",
+	group:
+		"align"
+	shell:
+		"samtools view {input.trim_uniq_sorted_bam} | awk '{{print $1}}' > {output.uniq_readID_list}"

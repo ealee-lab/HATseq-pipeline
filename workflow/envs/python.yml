@@ -1,0 +1,13 @@
+name: python
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.9
+  - numpy>=2.0
+  - pandas=2.3
+  - pybedtools>=0.10
+  - pysam>=0.20
+  - pip
+  - pip:
+    - natsort

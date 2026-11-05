@@ -13,6 +13,7 @@ properties:
   rep:
     type: string
     description: name of replicate
+    pattern: "^[A-Z][0-9]+$"
   raw_fastq1:
     type: string
     description: path to read 1
